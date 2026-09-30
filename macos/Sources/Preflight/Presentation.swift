@@ -21,12 +21,32 @@ final class AppSettings {
     var mode: DisplayMode { didSet { defaults.set(mode.rawValue, forKey: "displayMode") } }
     var automatic: Bool { didSet { defaults.set(automatic, forKey: "automaticRecommendations") } }
     var completedOnboarding: Bool { didSet { defaults.set(completedOnboarding, forKey: "completedOnboarding") } }
+    var cursorModelIDs: Set<String> { didSet { defaults.set(Array(cursorModelIDs), forKey: "cursorModelIDs") } }
+    var cursorCustomEffort: Bool { didSet { defaults.set(cursorCustomEffort, forKey: "cursorCustomEffort") } }
+    var installInProject: Bool { didSet { defaults.set(installInProject, forKey: "installInProject") } }
+    var projectPath: String { didSet { defaults.set(projectPath, forKey: "skillProjectPath") } }
+
+    func availableModels(for host: HostApp, catalog: ModelCatalog) -> [RecommendedModel] {
+        catalog.models(for: host).filter { host != .cursor || cursorModelIDs.contains($0.id) }
+    }
+
+    func installRoot(for host: HostApp) -> URL? {
+        if installInProject {
+            guard !projectPath.isEmpty else { return nil }
+            return URL(fileURLWithPath: projectPath).appendingPathComponent(host.skillsDirectory)
+        }
+        return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(host.skillsDirectory)
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         mode = DisplayMode(rawValue: defaults.string(forKey: "displayMode") ?? "") ?? .stealth
         automatic = defaults.object(forKey: "automaticRecommendations") as? Bool ?? true
         completedOnboarding = defaults.bool(forKey: "completedOnboarding")
+        cursorModelIDs = Set(defaults.stringArray(forKey: "cursorModelIDs") ?? ["grok-4.6"])
+        cursorCustomEffort = defaults.bool(forKey: "cursorCustomEffort")
+        installInProject = defaults.bool(forKey: "installInProject")
+        projectPath = defaults.string(forKey: "skillProjectPath") ?? ""
     }
 }
 

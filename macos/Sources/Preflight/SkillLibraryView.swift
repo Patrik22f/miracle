@@ -1,6 +1,10 @@
 import SwiftUI
 
 struct SkillLibraryView: View {
+    let host: HostApp
+    let settings: AppSettings
+    let installer: SkillInstallModel
+    var openSettings: () -> Void = {}
     @Environment(\.dismiss) private var dismiss
     @State private var library: SkillLibrary?
     @State private var query = ""
@@ -23,8 +27,6 @@ struct SkillLibraryView: View {
                 Spacer()
                 Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
             }
-            Text("Import installed skills and a public starter collection. Analyze also searches skills.sh for more candidates.")
-                .foregroundStyle(.secondary)
             HStack {
                 if let library {
                     Text("\(library.installedCount) installed · \(library.publicCount) public").font(.headline)
@@ -37,9 +39,6 @@ struct SkillLibraryView: View {
             TextField("Search imported skills", text: $query)
                 .textFieldStyle(.roundedBorder)
             if let error { Text(error).font(.callout).foregroundStyle(.secondary) }
-            if let library {
-                ForEach(library.warnings, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
-            }
             List(filteredSkills) { skill in
                 VStack(alignment: .leading, spacing: 5) {
                     HStack {
@@ -52,11 +51,13 @@ struct SkillLibraryView: View {
                         Text((skill.scopes + skill.purposes).joined(separator: " · "))
                             .font(.caption).foregroundStyle(.secondary)
                     }
-                    Link("Read SKILL.md", destination: skill.url).font(.caption)
+                    HStack {
+                        Link("Source", destination: skill.url).font(.caption)
+                        Spacer()
+                        SkillInstallButton(skill: InstallableSkill(skill), host: host, settings: settings, installer: installer, openSettings: openSettings)
+                    }
                 }.padding(.vertical, 5)
             }
-            Text("Imports index SKILL.md instructions; they do not install tools or execute skill commands. Copied local paths work in AI apps with access to this Mac.")
-                .font(.caption).foregroundStyle(.secondary)
         }
         .padding(20)
         .frame(minWidth: 560, idealWidth: 620, minHeight: 540)
@@ -75,7 +76,7 @@ struct SkillLibraryView: View {
             return
         } catch {
             guard !Task.isCancelled else { return }
-            self.error = "\(error.localizedDescription) Start the API with npm start."
+            self.error = error.localizedDescription
         }
     }
 }

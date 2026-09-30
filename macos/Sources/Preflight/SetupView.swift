@@ -2,7 +2,6 @@ import SwiftUI
 
 struct SetupView: View {
     @Bindable var settings: AppSettings
-    let onboarding: Bool
     private var permissionGranted: Bool { settings.permissionGranted }
     let complete: () -> Void
     let changed: () -> Void
@@ -12,12 +11,11 @@ struct SetupView: View {
             HStack(spacing: 12) {
                 Image(systemName: "sparkle").font(.largeTitle).foregroundStyle(.tint)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(onboarding ? "A little help, on your terms." : "How Preflight appears")
+                    Text("Welcome to Preflight")
                         .font(.title2.bold())
-                    Text("The right skills, before you send.").foregroundStyle(.secondary)
                 }
             }
-            Text("Choose how recommendations find you.").font(.headline)
+            Text("Choose your display mode").font(.headline)
             HStack(alignment: .top, spacing: 14) {
                 ForEach(DisplayMode.allCases) { mode in
                     Button {
@@ -47,8 +45,6 @@ struct SetupView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Toggle("Recommend automatically as I write", isOn: $settings.automatic)
                     .onChange(of: settings.automatic) { changed() }
-                Text("Automatic recommendations work with recognized Cursor prompts while Live capture is on. Other accessible text fields still appear in Preflight for manual analysis. Use ⌥⌘Return for a selection.")
-                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 HStack {
                     Label(permissionGranted ? "Accessibility is enabled" : "Allow access to your prompt", systemImage: permissionGranted ? "checkmark.circle.fill" : "hand.raised")
                     Spacer()
@@ -56,18 +52,12 @@ struct SetupView: View {
                         Button("Enable Accessibility…", action: AccessibilityPermission.request)
                     }
                 }
-                if permissionGranted {
-                    Text(settings.monitoringStatus).font(.caption).foregroundStyle(.secondary)
-                }
-                Text("With Live capture on, Preflight reads the focused editable field in other apps. Recognized Cursor prompts can be analyzed automatically. Your prompt stays on your Mac; only topic labels go to skills.sh.")
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+
             }
             Divider()
             HStack {
-                Text(permissionGranted ? "You can change this anytime from the menu bar." : "You can also paste a prompt manually.")
-                    .font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Button(onboarding ? "Start using Preflight" : "Done", action: complete)
+                Button("Start using Preflight", action: complete)
                     .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
             }
         }
@@ -90,7 +80,7 @@ private struct ModePreview: View {
             }.padding(10).background(.quaternary.opacity(0.4))
             Spacer(minLength: 8)
             if mode == .helpful {
-                Label("A skill for this prompt", systemImage: "sparkles")
+                Label("Model + effort", systemImage: "sparkles")
                     .font(.caption).padding(9).frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
                     .padding(.horizontal, 12)
