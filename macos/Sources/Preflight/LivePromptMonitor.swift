@@ -1,4 +1,5 @@
 import AppKit
+import OSLog
 
 @MainActor
 struct CaptureEnvironment {
@@ -20,6 +21,8 @@ struct CaptureEnvironment {
 @MainActor
 final class LivePromptMonitor: NSObject {
     var onReading: ((CaptureReading) -> Void)?
+    var onPermission: ((Bool) -> Void)?
+    var isEnabled: () -> Bool = { true }
     private let reader: any FocusedTextReading
     private let environment: CaptureEnvironment
     private var task: Task<Void, Never>?
@@ -27,6 +30,7 @@ final class LivePromptMonitor: NSObject {
     private var previousReading: CaptureReading?
     private var sessionActive = true
     private var displayAwake = true
+    private let logger = Logger(subsystem: "dev.preflight.hackathon", category: "monitor")
 
     init(reader: any FocusedTextReading = FocusedTextReader(), environment: CaptureEnvironment = .system) {
         self.reader = reader
@@ -62,13 +66,17 @@ final class LivePromptMonitor: NSObject {
 
     func sample(mode: CaptureMode = .live) async -> CaptureReading {
         let current = generation
+        let trusted = environment.isTrusted()
+        onPermission?(trusted)
         guard sessionActive, displayAwake else { return .status(.suspended) }
-        guard environment.isTrusted() else { return .status(.permissionRequired) }
+        guard trusted else { return .status(.permissionRequired) }
+        guard mode != .live || isEnabled() else { return .status(.reviewing) }
         guard let source = environment.frontmostSource() else { return .status(.waiting) }
         guard source.processID != environment.ownProcessID else { return .status(.reviewing) }
         let reading = await reader.read(from: source, mode: mode)
         guard !Task.isCancelled, current == generation, sessionActive, displayAwake else { return .status(.waiting) }
         guard environment.isTrusted() else { return .status(.permissionRequired) }
+        guard mode != .live || isEnabled() else { return .status(.reviewing) }
         guard environment.frontmostSource() == source else { return .status(.waiting) }
         return reading
     }
@@ -77,6 +85,9 @@ final class LivePromptMonitor: NSObject {
         let current = generation
         let reading = await sample()
         guard !Task.isCancelled, current == generation else { return .seconds(1) }
+        if previousReading?.status != reading.status, ProcessInfo.processInfo.arguments.contains("--diagnostics") {
+            logger.notice("\(reading.status.description, privacy: .public)")
+        }
         if previousReading != reading {
             previousReading = reading
             onReading?(reading)

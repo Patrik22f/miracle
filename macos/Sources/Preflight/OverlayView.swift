@@ -3,6 +3,8 @@ import SwiftUI
 struct OverlayView: View {
     @Bindable var model: AppModel
     let close: () -> Void
+    let settings: AppSettings
+    var openSettings: () -> Void = {}
     @State private var showingLibrary = false
 
     var body: some View {
@@ -16,7 +18,8 @@ struct OverlayView: View {
                 Spacer()
                 Button("Skill library", systemImage: "books.vertical") { showingLibrary = true }
                     .controlSize(.small)
-                Text("⌥⌘Return").font(.callout.monospaced()).foregroundStyle(.secondary)
+                Button(action: openSettings) { Label(settings.mode.title, systemImage: settings.mode.symbol) }
+                    .buttonStyle(.borderless).help("Change display mode")
             }
             HStack {
                 Text("Your prompt").font(.headline)
@@ -47,7 +50,7 @@ struct OverlayView: View {
                         HStack {
                             Text("Recommended skills").font(.headline)
                             Spacer()
-                            Text(model.demoMode ? "Demo fixture" : result.meta.source == "hybrid" ? "Imported + public search" : result.meta.source == "installed" ? "Installed skills" : result.meta.source == "skills.sh" ? "Live search" : "Local catalog")
+                            Text(model.demoMode ? "Demo fixture" : result.sourceLabel)
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         if let count = result.meta.importedCount {
@@ -80,9 +83,11 @@ struct OverlayView: View {
                             Text("\(result.model.profile.capitalized) model")
                         }.font(.callout)
                         Text("Suggestions only. Set model and effort in your AI app.").font(.caption).foregroundStyle(.secondary)
+                        Text(result.effort.reason).font(.caption).foregroundStyle(.secondary)
+                        Text(result.model.reason).font(.caption).foregroundStyle(.secondary)
                         ForEach(result.meta.warnings, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
                     } else if !model.isLoading {
-                        ContentUnavailableView("Ready when you are", systemImage: "text.magnifyingglass", description: Text("With Live capture on, type in another app and your text appears above. Choose Analyze prompt when you’re ready."))
+                        ContentUnavailableView("Ready when you are", systemImage: "text.magnifyingglass", description: Text("With Live capture on, text from other apps appears above. Cursor prompts get automatic recommendations when enabled. You can also choose Analyze prompt or use ⌥⌘Return."))
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -98,7 +103,7 @@ struct OverlayView: View {
                 .font(.caption2).foregroundStyle(.secondary)
         }
         .padding(22)
-        .frame(minWidth: 510, idealWidth: 560, minHeight: 670)
+        .frame(minWidth: 510, idealWidth: 560)
         .sheet(isPresented: $showingLibrary) { SkillLibraryView() }
     }
 }

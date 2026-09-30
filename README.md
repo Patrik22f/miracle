@@ -25,7 +25,7 @@ The sparkle menu-bar item opens the overlay. Click **Enable Accessibility…**, 
 
 On macOS versions that label this permission **Device Control and Data Access**, use that section under Privacy & Security. macOS may require Touch ID or your account password to approve it.
 
-Choose **Analyze prompt** when ready. Live capture does not call the API or search on each keystroke. Editing or pasting inside Preflight pauses capture so your draft is protected; switch **Live capture** back on to resume. You can also pause it from the menu bar. The pause preference is saved, but prompt text is not.
+With **Recommend automatically as I write** enabled, recognized Cursor prompts are analyzed after a 900 ms typing pause. Other captured fields wait for **Analyze prompt**; the shortcut also analyzes explicitly. Pausing automatic recommendations keeps text capture available. Editing or pasting inside Preflight pauses Live capture so your draft is protected; switch **Live capture** back on to resume. Setup and demo mode suspend capture. Preferences are saved, but prompt text is not. See [presentation modes](macos/README.md).
 
 **⌥⌘Return** still captures and analyzes a one-time snapshot, preferring selected text. It pauses live capture to preserve your selected excerpt. If a host does not expose an editable Accessibility field, copy and paste into Preflight instead. See [capture architecture and the host verification checklist](docs/LIVE_CAPTURE.md).
 
@@ -43,7 +43,7 @@ Or choose **Try demo** from the menu bar. Demo mode always shows the clearly lab
 
 ## What's working
 
-- Native SwiftUI overlay, AppKit menu bar, dedicated registered global shortcut.
+- Native SwiftUI review, Stealth menu-bar notifications, Helpful prompt-anchored recommendations, onboarding, and a dedicated registered global shortcut.
 - Automatic capture of supported focused editable text inputs, app provenance, persistent pause/resume, secure/read-only field exclusion, and paste fallback.
 - Background AX reads, bounded timeouts, serial sampling, permission recovery, stale-read rejection, and automatic pause for manual editing and demo mode.
 - `POST /analyze` with request validation, bounded input, timeouts, errors, and stable JSON shapes.
@@ -114,7 +114,7 @@ This version follows the focused editable field through Accessibility and keeps 
 
 ## Local data flow
 
-The API binds to `127.0.0.1` and rejects browser origins. Live capture reads the focused editable field in any accessible foreground app, not just AI apps. It skips Preflight itself, secure fields identified by Accessibility, and read-only controls. Captured text stays in memory; analysis is explicit. Raw prompts go only from the native client to this local API when you analyze. Only controlled topic labels (such as `react performance`) go to skills.sh. No prompt logging, telemetry, prompt persistence, or LLM provider calls. Imported skill snapshots persist only in the ignored local `.preflight/` directory. Clicking a skill link opens its local instructions or public source. Copy actions intentionally replace the clipboard. Do not expose this unauthenticated development API to a network.
+The API binds to `127.0.0.1` and rejects browser origins. Live capture reads the focused editable field in any accessible foreground app, not just AI apps. It skips Preflight itself, secure fields identified by Accessibility, and read-only controls. Captured text stays in memory. Analysis is explicit except for recognized Cursor prompts when automatic recommendations are enabled. Raw prompts go only from the native client to this local API during analysis. Only controlled topic labels (such as `react performance`) go to skills.sh. No prompt logging, telemetry, prompt persistence, or LLM provider calls. Imported skill snapshots persist only in the ignored local `.preflight/` directory. Clicking a skill link opens its local instructions or public source. Copy actions intentionally replace the clipboard. Do not expose this unauthenticated development API to a network.
 
 Quit Preflight before rebuilding; the build script refuses to overwrite a running app. It automatically selects a single available Apple Development certificate and remembers that identity locally in `build/.signing-identity`. With multiple certificates, set `PREFLIGHT_CODESIGN_IDENTITY` to the desired name or SHA-1. Builds are signed in a temporary directory, then installed at `~/Applications/Preflight.app` and verified. The `build/Preflight.app` path is a symlink to that installation. Both signing and the runnable bundle stay outside iCloud storage, which can invalidate signatures by reattaching Finder metadata. Set `PREFLIGHT_APP_PATH` to another absolute, non-iCloud `.app` path if needed. This is development signing, not notarized distribution.
 

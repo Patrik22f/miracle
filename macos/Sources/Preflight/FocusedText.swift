@@ -15,6 +15,8 @@ enum AccessibilityPermission {
 /// clipboard access, window crawling, or prompt persistence are used.
 actor FocusedTextReader: FocusedTextReading {
     private var preparedSource: PromptSource?
+    private var previousElement: AXUIElement?
+    private var fieldID = UUID()
 
     func read(from source: PromptSource, mode: CaptureMode) -> CaptureReading {
         guard !Task.isCancelled else { return .status(.waiting) }
@@ -66,7 +68,33 @@ actor FocusedTextReader: FocusedTextReading {
         guard let current = elementAttribute(app, kAXFocusedUIElementAttribute), CFEqual(focused, current) else {
             return .status(.waiting)
         }
-        return PromptTextPolicy.reading(fullText: full, selectedText: selected, mode: mode, source: source)
+        let reading = PromptTextPolicy.reading(fullText: full, selectedText: selected, mode: mode, source: source)
+        guard case .captured(let captured) = reading else { return reading }
+        if previousElement == nil || !CFEqual(previousElement, focused) {
+            previousElement = focused
+            fieldID = UUID()
+        }
+        let label = [kAXTitleAttribute, kAXDescriptionAttribute, kAXHelpAttribute, kAXPlaceholderValueAttribute]
+            .compactMap { attribute(focused, $0) as? String }.joined(separator: " ")
+        let automatic = PromptPolicy.accepts(bundleID: source.bundleIdentifier ?? "", role: role,
+                                             subrole: subrole ?? "", label: label)
+        let bounds = fieldBounds(focused)
+        guard let current = elementAttribute(app, kAXFocusedUIElementAttribute), CFEqual(focused, current) else {
+            return .status(.waiting)
+        }
+        return .captured(CapturedPrompt(text: captured.text, source: source, fieldID: fieldID,
+                                        bounds: bounds, supportsAutomaticRecommendations: automatic))
+    }
+
+    private func fieldBounds(_ element: AXUIElement) -> CGRect? {
+        guard let positionValue = attribute(element, kAXPositionAttribute), CFGetTypeID(positionValue) == AXValueGetTypeID(),
+              let sizeValue = attribute(element, kAXSizeAttribute), CFGetTypeID(sizeValue) == AXValueGetTypeID() else { return nil }
+        var position = CGPoint.zero
+        var size = CGSize.zero
+        guard AXValueGetValue(unsafeDowncast(positionValue, to: AXValue.self), .cgPoint, &position),
+              AXValueGetValue(unsafeDowncast(sizeValue, to: AXValue.self), .cgSize, &size),
+              size.width > 0, size.height > 0 else { return nil }
+        return CGRect(origin: position, size: size)
     }
 
     private func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {

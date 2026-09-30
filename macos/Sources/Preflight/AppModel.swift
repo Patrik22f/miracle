@@ -13,11 +13,20 @@ final class AppModel {
     private(set) var demoMode = false
     private(set) var liveCaptureEnabled: Bool
     private(set) var captureStatus: CaptureStatus = .waiting
+    private(set) var automaticRecommendationsEnabled = true
+    private(set) var activeSnapshot: PromptSnapshot?
+    var hasUnreadRecommendation = false
+    var helpfulDismissed = false
+    var hasError = false
+    @ObservationIgnored var presentationChanged: () -> Void = {}
+    @ObservationIgnored var permissionChanged: (Bool) -> Void = { _ in }
     @ObservationIgnored private let monitor: LivePromptMonitor
     @ObservationIgnored private let preferences: UserDefaults?
     @ObservationIgnored private let analyzePrompt: @Sendable (String, String?) async throws -> AnalyzeResponse
+    @ObservationIgnored private(set) var task: Task<Void, Never>?
     private var captureStarted = false
-    private var task: Task<Void, Never>?
+    private var captureSuspended = false
+    private var lastFieldID: UUID?
     private var revision = UUID()
 
     init(monitor: LivePromptMonitor = LivePromptMonitor(), preferences: UserDefaults? = nil,
@@ -30,6 +39,11 @@ final class AppModel {
         self.liveCaptureEnabled = preferences?.object(forKey: "liveCaptureEnabled") as? Bool ?? true
         if !liveCaptureEnabled { captureStatus = .paused }
         monitor.onReading = { [weak self] reading in self?.receiveCapture(reading) }
+        monitor.onPermission = { [weak self] granted in self?.permissionChanged(granted) }
+        monitor.isEnabled = { [weak self] in
+            guard let self else { return false }
+            return self.liveCaptureEnabled && !self.demoMode && !self.captureSuspended
+        }
     }
 
     func startCapture() {
@@ -45,30 +59,56 @@ final class AppModel {
     func setLiveCaptureEnabled(_ enabled: Bool) {
         liveCaptureEnabled = enabled
         preferences?.set(enabled, forKey: "liveCaptureEnabled")
+        if !enabled { endAutomaticSession() }
+        synchronizeCapture()
+    }
+
+    func setAutomaticRecommendationsEnabled(_ enabled: Bool) {
+        guard automaticRecommendationsEnabled != enabled else { return }
+        automaticRecommendationsEnabled = enabled
+        if !enabled { endAutomaticSession() }
+        synchronizeCapture()
+    }
+
+    func setCaptureSuspended(_ suspended: Bool) {
+        guard captureSuspended != suspended else { return }
+        captureSuspended = suspended
+        if suspended { endAutomaticSession() }
         synchronizeCapture()
     }
 
     private func synchronizeCapture() {
-        guard liveCaptureEnabled, !demoMode else {
-            monitor.stop()
-            captureStatus = .paused
-            return
-        }
-        captureStatus = AccessibilityPermission.isGranted ? .waiting : .permissionRequired
+        // Keep checking permission while paused or in setup, without reading text.
+        monitor.stop()
+        if !liveCaptureEnabled || demoMode { captureStatus = .paused }
+        else if captureSuspended { captureStatus = .reviewing }
+        else { captureStatus = AccessibilityPermission.isGranted ? .waiting : .permissionRequired }
         if captureStarted { monitor.start() }
+        presentationChanged()
     }
 
     func receiveCapture(_ reading: CaptureReading) {
-        guard liveCaptureEnabled, !demoMode else { return }
+        guard liveCaptureEnabled, !demoMode, !captureSuspended else { return }
         captureStatus = reading.status
-        if case .captured(let captured) = reading { applyCapture(captured) }
+        switch reading {
+        case .captured(let captured): applyCapture(captured)
+        case .status(.reviewing): break // Keep the prompt while reviewing it in Preflight.
+        case .status: receive(nil)
+        }
+        presentationChanged()
     }
 
     private func applyCapture(_ captured: CapturedPrompt) {
-        guard prompt != captured.text || source != captured.source else { return }
+        if liveCaptureEnabled, automaticRecommendationsEnabled, let snapshot = captured.automaticSnapshot {
+            receive(snapshot)
+            return
+        }
+        guard prompt != captured.text || source != captured.source || lastFieldID != captured.fieldID || activeSnapshot != nil else { return }
+        activeSnapshot = nil
         invalidate()
         prompt = captured.text
         source = captured.source
+        lastFieldID = captured.fieldID
     }
 
     func editPrompt(_ text: String) {
@@ -76,10 +116,12 @@ final class AppModel {
         setLiveCaptureEnabled(false)
         invalidate()
         source = nil
+        lastFieldID = nil
         prompt = text
     }
 
     func setDemoMode(_ enabled: Bool) {
+        activeSnapshot = nil
         invalidate()
         demoMode = enabled
         synchronizeCapture()
@@ -90,6 +132,7 @@ final class AppModel {
         task = nil
         revision = UUID()
         isLoading = false
+        presentationChanged()
     }
 
     func invalidate() {
@@ -97,6 +140,51 @@ final class AppModel {
         result = nil
         selected = []
         message = nil
+        hasError = false
+        hasUnreadRecommendation = false
+        presentationChanged()
+    }
+
+    private func endAutomaticSession() {
+        guard activeSnapshot != nil else { return }
+        activeSnapshot = nil
+        invalidate()
+    }
+
+    func receive(_ snapshot: PromptSnapshot?) {
+        guard let snapshot else {
+            if activeSnapshot != nil {
+                endAutomaticSession()
+                prompt = ""
+                source = nil
+                lastFieldID = nil
+            }
+            return
+        }
+        guard liveCaptureEnabled, automaticRecommendationsEnabled, !demoMode, !captureSuspended else { return }
+        if let activeSnapshot, snapshot.matchesContent(of: activeSnapshot) {
+            self.activeSnapshot = snapshot
+            presentationChanged()
+            return
+        }
+        invalidate()
+        activeSnapshot = snapshot
+        helpfulDismissed = false
+        prompt = snapshot.text
+        source = PromptSource(processID: snapshot.processID, bundleIdentifier: snapshot.bundleIdentifier, name: snapshot.appName)
+        lastFieldID = snapshot.fieldID
+        guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        analyze(after: .milliseconds(900))
+    }
+
+    func markRead() {
+        hasUnreadRecommendation = false
+        presentationChanged()
+    }
+
+    func dismissHelpful() {
+        helpfulDismissed = true
+        markRead()
     }
 
     func capture() async {
@@ -111,15 +199,22 @@ final class AppModel {
             analyze()
         } else {
             message = reading.status.description
+            hasError = true
+            presentationChanged()
         }
     }
 
     @discardableResult
-    func analyze() -> Task<Void, Never>? {
+    func analyze() -> Task<Void, Never>? { analyze(after: .zero) }
+
+    @discardableResult
+    private func analyze(after delay: Duration) -> Task<Void, Never>? {
         invalidate()
         let text = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, text.utf16.count <= PromptTextPolicy.maximumLength else {
             message = "Enter a prompt of 1–12,000 characters."
+            hasError = true
+            presentationChanged()
             return nil
         }
         let current = revision
@@ -127,8 +222,11 @@ final class AppModel {
         let app = sourceApp
         let analyzePrompt = analyzePrompt
         isLoading = true
+        presentationChanged()
         task = Task { [weak self] in
             do {
+                if delay != .zero { try await Task.sleep(for: delay) }
+                try Task.checkCancellation()
                 let response: AnalyzeResponse
                 if useDemo { response = try .demo() }
                 else { response = try await analyzePrompt(text, app) }
@@ -136,10 +234,15 @@ final class AppModel {
                 self.result = response
                 self.selected = Set(response.skills.map(\.id))
                 self.isLoading = false
+                self.hasUnreadRecommendation = true
+                self.presentationChanged()
             } catch {
                 guard !Task.isCancelled, let self, self.revision == current else { return }
                 self.isLoading = false
                 self.message = "\(error.localizedDescription) Start the API with npm start, or turn on Demo mode."
+                self.hasError = true
+                self.hasUnreadRecommendation = true
+                self.presentationChanged()
             }
         }
         return task
@@ -148,6 +251,7 @@ final class AppModel {
     func loadDemo() {
         setDemoMode(true)
         source = nil
+        lastFieldID = nil
         prompt = "Optimize this Next.js page. It is slow when rendering 500 products."
         analyze()
     }
@@ -157,6 +261,8 @@ final class AppModel {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(output, forType: .string)
         message = "Copied. Paste into your AI app, review, and send."
+        hasError = false
+        markRead()
     }
 
     func promptWithSkills(includeSkills: Bool) -> String {

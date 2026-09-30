@@ -9,6 +9,15 @@ struct PromptSource: Equatable, Sendable {
 struct CapturedPrompt: Equatable, Sendable {
     let text: String
     let source: PromptSource
+    var fieldID: UUID? = nil
+    var bounds: CGRect? = nil
+    var supportsAutomaticRecommendations = false
+
+    var automaticSnapshot: PromptSnapshot? {
+        guard supportsAutomaticRecommendations, let fieldID else { return nil }
+        return PromptSnapshot(text: text, appName: source.name, processID: source.processID,
+                              fieldID: fieldID, bounds: bounds, bundleIdentifier: source.bundleIdentifier)
+    }
 }
 
 enum CaptureMode: Sendable {

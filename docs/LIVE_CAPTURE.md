@@ -1,6 +1,6 @@
 # Live prompt capture
 
-With Accessibility permission and Live capture enabled, Preflight follows the focused editable text field in the foreground application. The overlay stays visible without taking focus on each update. Text is held in memory, and no analysis runs until the user clicks Analyze prompt or invokes the explicit shortcut.
+With Accessibility permission and Live capture enabled, Preflight follows the focused editable text field in the foreground application. The overlay stays visible without taking focus on each update. Text is held in memory. Recognized Cursor prompts can trigger analysis after a 900 ms typing pause when automatic recommendations are enabled. Other fields wait for Analyze prompt or the explicit shortcut.
 
 ## Components and ownership
 
@@ -9,7 +9,7 @@ With Accessibility permission and Live capture enabled, Preflight follows the fo
 | `PromptCapture.swift` | Sendable source/snapshot/status values and text-size policy. |
 | `FocusedTextReader` actor | Synchronous cross-process AX reads, field eligibility, secure-field checks, selection handling and size limits. No UI or network calls. |
 | `LivePromptMonitor` on MainActor | Foreground-app selection, trust checks, serial polling, deduplication, lifecycle/cancellation and stale-read rejection. Dependencies can be replaced in tests. |
-| `AppModel` on MainActor | Prompt provenance, live/manual/demo transitions and analysis revision checks. Capture only changes local state. |
+| `AppModel` on MainActor | Prompt provenance, live/manual/demo transitions and analysis revision checks. Recognized Cursor snapshots can schedule debounced analysis; generic captured fields only change local state. |
 | `LiveCaptureView` | Visible capture state, source attribution, permission action and pause/resume. |
 
 Swift 6 checks isolation boundaries. Only Sendable values cross from the reader actor to the UI; AX objects remain inside the reader. The existing API contract is unchanged.
@@ -20,18 +20,18 @@ Swift 6 checks isolation boundaries. Only Sendable values cross from the reader 
 - Polling is deliberate: third-party editors vary in their support for Accessibility notifications. The service reads only the focused control and at most three ancestors to check secure-field semantics. It never walks windows or whole documents.
 - AX messaging has a 150 ms per-element timeout. Reads can take more than one timeout across attributes, but they run off the UI actor and cannot accumulate on every keystroke.
 - Permission, foreground app, and lifecycle generation are checked again after an asynchronous read. The reader also verifies that the focused element has not changed. Invalidated reads are discarded.
-- Pause/demo/quit cancel monitoring. Session/display notifications suppress capture while inactive. An in-flight AX call can finish, but its result is rejected after cancellation.
-- The pause choice is the only persisted capture data. Closing the panel leaves menu-bar capture running; pause it in the menu to stop.
+- Pause/demo/settings cancel text capture; the monitor continues checking permission without reading external fields. Quit stops monitoring. Session/display notifications suppress capture while inactive. An in-flight AX call can finish, but its result is rejected after cancellation.
+- Capture pause, automatic-recommendation preference, and display mode are persisted; prompt text is not. Closing the panel leaves menu-bar capture running; pause it in the menu to stop.
 
 ## Editing rules
 
 - Live capture uses the full field, preserving whitespace, indentation and newlines. It does not shrink to a selection when the user highlights text.
 - A genuinely empty field replaces the old prompt with an empty string. An unreadable field does not masquerade as an empty one.
-- Duplicated text/source snapshots do not invalidate recommendations. Changed text or a different source does; in-flight analysis is canceled and revision-guarded.
+- Duplicated text/source/field snapshots do not invalidate recommendations. Anchor movement repositions Helpful without reanalyzing. Changed text or a different source does; in-flight analysis is canceled and revision-guarded.
 - Typing or pasting in Preflight pauses live capture and removes source attribution. Resuming deliberately lets the next captured field replace the manual draft.
 - Demo mode suspends live capture. Leaving demo resumes it only if the live preference is enabled.
 - The shortcut captures once before opening the overlay, prefers selected text, and pauses monitoring to protect that excerpt. A failed capture keeps the last snapshot and displays a recovery message.
-- In unsupported/secure/unreadable states, the last snapshot remains labeled “Captured from …”; the status explains why the current field is not being followed.
+- In unsupported/secure/unreadable states, a generic manually analyzed snapshot stays labeled “Captured from …”. An automatic Cursor session instead cancels analysis, clears its prompt and recommendations, and removes the Helpful anchor, so stale automatic advice cannot appear for another field.
 
 ## Supported surface and limits
 
@@ -41,7 +41,7 @@ On application switches, the reader requests Electron's documented `AXManualAcce
 
 Native editors and web contenteditable controls can work when they expose these semantics. Custom canvas editors, some Electron controls, and terminal CLI prompts may not. We do not read terminal scrollback, synthesize copy keystrokes, inspect clipboard history, install a keylogger, or guess prompt text from a whole browser page. Host-specific adapters can implement `FocusedTextReading` later without changing prompt state or API contracts.
 
-A source app can provide incomplete or incorrect Accessibility metadata; support must be verified per editor. Password exclusion relies on the metadata the host exposes. There is no AI-app allowlist: any eligible foreground text field is followed while Live capture is on.
+A source app can provide incomplete or incorrect Accessibility metadata; support must be verified per editor. Password exclusion relies on the metadata the host exposes. Live capture has no AI-app allowlist: any eligible foreground text field is followed while enabled. Automatic analysis has a separate policy: only recognized Cursor prompt labels qualify. Both modes share the same reader, secure-field checks, lifecycle, and size limits.
 
 ## Verification
 

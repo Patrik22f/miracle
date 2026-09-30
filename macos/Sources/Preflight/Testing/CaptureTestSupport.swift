@@ -60,4 +60,13 @@ final class CaptureEnvironmentStub {
         CaptureEnvironment(isTrusted: { self.trusted }, frontmostSource: { self.source }, ownProcessID: 100)
     }
 }
+extension CapturedPrompt {
+    static func cursorFixture(text: String = "Optimize a SwiftUI app") -> CapturedPrompt {
+        CapturedPrompt(text: text,
+                       source: PromptSource(processID: 123, bundleIdentifier: "com.todesktop.230313mzl4w4u92", name: "Cursor"),
+                       fieldID: UUID(uuidString: "00000000-0000-0000-0000-000000000001"),
+                       bounds: CGRect(x: 0, y: 100, width: 500, height: 100),
+                       supportsAutomaticRecommendations: true)
+    }
+}
 #endif
