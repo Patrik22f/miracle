@@ -8,28 +8,32 @@ struct PromptSuggestionsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label("Your next task", systemImage: "sparkles").font(.headline)
+                Label(suggestions.demoMode ? "Suggested prompts" : "Your next task", systemImage: "sparkles").font(.headline)
                 Spacer()
                 if suggestions.isLoading { ProgressView().controlSize(.small) }
-                Button(action: suggestions.refresh) { Image(systemName: "arrow.clockwise") }
-                    .buttonStyle(.borderless).accessibilityLabel("Refresh prompt suggestions")
-                    .disabled(suggestions.projectPath.isEmpty || !suggestions.enabled || suggestions.isLoading)
+                if !suggestions.demoMode {
+                    Button(action: suggestions.refresh) { Image(systemName: "arrow.clockwise") }
+                        .buttonStyle(.borderless).accessibilityLabel("Refresh prompt suggestions")
+                        .disabled(suggestions.projectPath.isEmpty || !suggestions.enabled || suggestions.isLoading)
+                }
             }
-            if !suggestions.enabled {
+            if !suggestions.enabled && !suggestions.demoMode {
                 Button("Enable prompt suggestions") { suggestions.setEnabled(true) }
             } else {
-                HStack {
-                    Button(action: suggestions.chooseProject) {
-                        Label(suggestions.projectName, systemImage: "folder")
-                            .lineLimit(1).truncationMode(.middle)
-                    }.buttonStyle(.borderless).help(suggestions.projectPath)
-                    if !suggestions.selectedProjectPath.isEmpty {
-                        Text("Selected project").font(.caption2).foregroundStyle(.secondary)
+                if !suggestions.demoMode {
+                    HStack {
+                        Button(action: suggestions.chooseProject) {
+                            Label(suggestions.projectName, systemImage: "folder")
+                                .lineLimit(1).truncationMode(.middle)
+                        }.buttonStyle(.borderless).help(suggestions.projectPath)
+                        if !suggestions.selectedProjectPath.isEmpty {
+                            Text("Selected project").font(.caption2).foregroundStyle(.secondary)
+                        }
                     }
-                }
-                if suggestions.projectPath.isEmpty {
-                    Text("Choose your code folder once. Miracle follows changes and suggests three next tasks using Groq.")
-                        .font(.caption).foregroundStyle(.secondary)
+                    if suggestions.projectPath.isEmpty {
+                        Text("Choose your code folder once. Miracle follows changes and suggests three next tasks using Groq.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 if let response = suggestions.response, response.status == "ready" {
                     if !compact, let summary = response.summary {
@@ -43,14 +47,18 @@ struct PromptSuggestionsView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(suggestion.title).font(.subheadline.weight(.semibold))
                             if !compact {
-                                Text(suggestion.reason).font(.caption).foregroundStyle(.secondary)
+                                if !suggestion.reason.isEmpty {
+                                    Text(suggestion.reason).font(.caption).foregroundStyle(.secondary)
+                                }
                                 DisclosureGroup("View prompt") {
                                     Text(suggestion.prompt).font(.callout).textSelection(.enabled)
-                                    Text(suggestion.files.joined(separator: " · ")).font(.caption2).foregroundStyle(.secondary)
+                                    if !suggestion.files.isEmpty {
+                                        Text(suggestion.files.joined(separator: " · ")).font(.caption2).foregroundStyle(.secondary)
+                                    }
                                 }.font(.caption)
                             }
                             HStack {
-                                Button("Use draft") { use(suggestion) }
+                                if !suggestions.demoMode { Button("Use draft") { use(suggestion) } }
                                 Button(suggestions.copiedID == suggestion.id ? "Copied" : "Copy prompt") { suggestions.copy(suggestion) }
                             }.controlSize(.small)
                         }

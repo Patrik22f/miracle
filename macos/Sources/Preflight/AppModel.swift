@@ -181,7 +181,9 @@ final class AppModel {
             prompt = ""
             source = nil
             lastFieldID = nil
+            updateSuggestions(detectedProjectPath: nil)
         }
+        suggestions.setDemoMode(enabled)
         synchronizeCapture()
     }
 

@@ -61,6 +61,56 @@ struct PromptSuggestionTests {
         model.setRunning(false)
     }
 
+    @Test("Demo suggestions need no project, enabled preference or backend")
+    func demoSuggestions() throws {
+        let name = "demo-suggestions-\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        defaults.set(false, forKey: "promptSuggestionsEnabled")
+        let model = PromptSuggestionsModel(preferences: defaults) { _ in
+            Issue.record("Demo suggestions must stay offline")
+            throw ClientError.message("Unexpected API call")
+        }
+        model.setRunning(true)
+        model.setDemoMode(true)
+        #expect(model.projectPath.isEmpty)
+        #expect(model.response?.suggestions.map(\.prompt) == DemoCatalog.scenarios.map(\.prompt))
+        model.refresh()
+        model.update(prompt: "A draft in Cursor", context: nil, detectedProjectPath: "/detected")
+        #expect(model.response?.status == "ready")
+        #expect(model.response?.project == nil)
+        #expect(model.task == nil)
+        #expect(!model.isLoading)
+        model.setDemoMode(false)
+        #expect(model.response == nil)
+        #expect(!model.enabled)
+        #expect(model.projectPath == "/detected")
+        #expect(defaults.object(forKey: "suggestionProjectPath") == nil)
+        #expect(!defaults.bool(forKey: "promptSuggestionsEnabled"))
+    }
+
+    @Test("Entering demo discards late suggestions and exit resumes live suggestions")
+    func demoCancelsLiveRequest() async {
+        let deferred = DeferredValue<SuggestionResponse>()
+        let model = PromptSuggestionsModel { _ in await deferred.request() }
+        model.selectProject("/project")
+        model.setRunning(true)
+        model.refresh()
+        let pending = model.task
+        await deferred.waitUntilRequested()
+        model.setDemoMode(true)
+        await deferred.resolve(suggestionResult())
+        await pending?.value
+        #expect(model.response?.suggestions.map(\.prompt) == DemoCatalog.scenarios.map(\.prompt))
+        #expect(model.task == nil)
+        model.setDemoMode(false)
+        #expect(model.response == nil)
+        #expect(model.projectPath == "/project")
+        #expect(model.isLoading)
+        #expect(model.task != nil)
+        model.setRunning(false)
+    }
+
     @Test("Opt-out, suspension and changed chat discard in-flight results", arguments: ["disable", "pause", "chat"])
     func cancellation(action: String) async {
         let deferred = DeferredValue<SuggestionResponse>()

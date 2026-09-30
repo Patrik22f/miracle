@@ -65,6 +65,7 @@ extension APIClient {
 
 @MainActor @Observable
 final class PromptSuggestionsModel {
+    private(set) var demoMode = false
     private(set) var enabled: Bool
     private(set) var selectedProjectPath: String
     private(set) var detectedProjectPath: String?
@@ -98,6 +99,12 @@ final class PromptSuggestionsModel {
         restart()
     }
 
+    func setDemoMode(_ enabled: Bool) {
+        guard demoMode != enabled else { return }
+        demoMode = enabled
+        restart()
+    }
+
     func setRunning(_ running: Bool) {
         guard self.running != running else { return }
         self.running = running
@@ -126,6 +133,7 @@ final class PromptSuggestionsModel {
         self.detectedProjectPath = detectedProjectPath
         let input = SuggestionRequest(projectPath: projectPath, prompt: prompt, context: context)
         guard input != current else { return }
+        if demoMode { current = input; return }
         restart()
     }
 
@@ -141,6 +149,11 @@ final class PromptSuggestionsModel {
         isLoading = false
         let input = SuggestionRequest(projectPath: projectPath, prompt: prompt, context: context)
         current = input
+        if demoMode {
+            response = DemoCatalog.promptSuggestions
+            changed()
+            return
+        }
         guard enabled, running, !projectPath.isEmpty else { changed(); return }
         let revision = revision
         let fetch = fetch

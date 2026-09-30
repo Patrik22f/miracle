@@ -2,6 +2,8 @@
 
 A small static storefront for presenting Miracle from a real coding app. Open this folder in Cursor. Enable Demo mode in Miracle Settings to view the website, then type the prompts below into Cursor's chat input without sending them. Miracle uses its normal Accessibility capture and presentation modes. The site itself has no database or AI chat.
 
+The same two prompts are available in Miracle's **Suggested prompts** section. Use **Copy prompt**, paste into Cursor and wait for the recommendations. No project selection or Groq key is needed for these bundled suggestions.
+
 ## 1. Database
 
 Chceme do tohoto webu integrovat databázi pro produkty, zákazníky a objednávky. Navrhni vhodné řešení a připrav propojení.
