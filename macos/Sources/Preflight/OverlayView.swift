@@ -75,10 +75,8 @@ struct OverlayView: View {
                             }
                         }.font(.caption)
                     }
-                    if !model.demoMode {
-                        PromptSuggestionsView(suggestions: model.suggestions, use: model.useSuggestion)
-                        Divider()
-                    }
+                    PromptSuggestionsView(suggestions: model.suggestions, use: model.useSuggestion)
+                    Divider()
                     if let result = model.result {
                         if let host = model.targetApp {
                             ModelRecommendationView(result: result, host: host, settings: settings, catalog: catalog, demo: model.demoMode)

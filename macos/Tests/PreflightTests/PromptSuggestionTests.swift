@@ -61,6 +61,101 @@ struct PromptSuggestionTests {
         model.setRunning(false)
     }
 
+    @Test("Demo fetches Groq suggestions for Shopfront without changing saved preferences")
+    func demoSuggestions() async throws {
+        let name = "demo-suggestions-\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        defaults.set(false, forKey: "promptSuggestionsEnabled")
+        defaults.set("/original-project", forKey: "suggestionProjectPath")
+        let model = PromptSuggestionsModel(preferences: defaults) { input in
+            #expect(input.projectPath == DemoCatalog.projectPath)
+            #expect(!input.projectPath.isEmpty)
+            #expect(input.prompt == DemoCatalog.suggestionBrief)
+            #expect(input.context == nil)
+            return suggestionResult()
+        }
+        model.update(prompt: "Unrelated draft", context: .snapshot("Unrelated chat", id: "chat", source: "manual"),
+                     detectedProjectPath: "/unrelated-project")
+        model.setRunning(true)
+        model.setDemoMode(true)
+        #expect(model.isLoading)
+        #expect(model.response == nil)
+        await withCheckedContinuation { continuation in
+            model.changed = {
+                if model.response?.status == "ready" {
+                    model.changed = {}
+                    continuation.resume()
+                }
+            }
+            model.refresh()
+        }
+        #expect(model.response?.provider == "groq")
+        #expect(model.response?.suggestions == [exampleSuggestion])
+        model.update(prompt: "Another captured prompt", context: nil, detectedProjectPath: "/other-project")
+        #expect(model.response?.suggestions == [exampleSuggestion])
+        model.setDemoMode(false)
+        #expect(model.response == nil)
+        #expect(!model.enabled)
+        #expect(model.projectPath == "/original-project")
+        #expect(model.task == nil)
+        #expect(defaults.string(forKey: "suggestionProjectPath") == "/original-project")
+        #expect(!defaults.bool(forKey: "promptSuggestionsEnabled"))
+        model.setRunning(false)
+    }
+
+    @Test("Changing between demo and normal projects rejects late Groq responses")
+    func demoCancelsLiveRequest() async {
+        let deferred = DeferredValue<SuggestionResponse>()
+        let model = PromptSuggestionsModel { _ in await deferred.request() }
+        model.selectProject("/project")
+        model.setRunning(true)
+        model.refresh()
+        let pending = model.task
+        await deferred.waitUntilRequested()
+        model.setDemoMode(true)
+        model.setRunning(false)
+        await deferred.resolve(suggestionResult())
+        await pending?.value
+        #expect(model.response == nil)
+        #expect(model.projectPath == DemoCatalog.projectPath)
+
+        model.setRunning(true)
+        model.refresh()
+        let demoPending = model.task
+        await deferred.waitUntilRequested()
+        model.setDemoMode(false)
+        await deferred.resolve(suggestionResult())
+        await demoPending?.value
+        #expect(model.response == nil)
+        #expect(model.projectPath == "/project")
+        #expect(model.isLoading)
+        #expect(model.task != nil)
+        model.setRunning(false)
+    }
+
+    @Test("A demo provider error stays visible without canned fallback prompts")
+    func demoError() async {
+        let model = PromptSuggestionsModel { _ in
+            SuggestionResponse(schemaVersion: "1.0", status: "setup", suggestions: [], provider: "groq",
+                               model: "test", retryAfterMs: 0, message: "Configure Groq")
+        }
+        model.setDemoMode(true)
+        model.setRunning(true)
+        await withCheckedContinuation { continuation in
+            model.changed = {
+                if model.response?.status == "setup" {
+                    model.changed = {}
+                    continuation.resume()
+                }
+            }
+            model.refresh()
+        }
+        #expect(model.message == "Configure Groq")
+        #expect(model.response?.suggestions.isEmpty == true)
+        model.setRunning(false)
+    }
+
     @Test("Opt-out, suspension and changed chat discard in-flight results", arguments: ["disable", "pause", "chat"])
     func cancellation(action: String) async {
         let deferred = DeferredValue<SuggestionResponse>()

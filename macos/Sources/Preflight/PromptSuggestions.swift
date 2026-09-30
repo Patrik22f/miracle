@@ -65,6 +65,7 @@ extension APIClient {
 
 @MainActor @Observable
 final class PromptSuggestionsModel {
+    private(set) var demoMode = false
     private(set) var enabled: Bool
     private(set) var selectedProjectPath: String
     private(set) var detectedProjectPath: String?
@@ -72,8 +73,12 @@ final class PromptSuggestionsModel {
     private(set) var isLoading = false
     private(set) var message: String?
     private(set) var copiedID: String?
-    var projectPath: String { selectedProjectPath.isEmpty ? detectedProjectPath ?? "" : selectedProjectPath }
-    var projectName: String { projectPath.isEmpty ? "Choose a project" : URL(fileURLWithPath: projectPath).lastPathComponent }
+    var projectPath: String {
+        demoMode ? DemoCatalog.projectPath : selectedProjectPath.isEmpty ? detectedProjectPath ?? "" : selectedProjectPath
+    }
+    var projectName: String {
+        demoMode ? "Shopfront" : projectPath.isEmpty ? "Choose a project" : URL(fileURLWithPath: projectPath).lastPathComponent
+    }
     @ObservationIgnored var changed: () -> Void = {}
     @ObservationIgnored private let preferences: UserDefaults?
     @ObservationIgnored private let fetch: @Sendable (SuggestionRequest) async throws -> SuggestionResponse
@@ -83,6 +88,11 @@ final class PromptSuggestionsModel {
     private var revision = UUID()
     private var prompt = ""
     private var context: ConversationContext?
+    private var request: SuggestionRequest {
+        // Demo sends only the bundled storefront and its brief, never another project's captured chat.
+        .init(projectPath: projectPath, prompt: demoMode ? DemoCatalog.suggestionBrief : prompt,
+              context: demoMode ? nil : context)
+    }
 
     init(preferences: UserDefaults? = nil,
          fetch: @escaping @Sendable (SuggestionRequest) async throws -> SuggestionResponse = { try await APIClient().suggestions($0) }) {
@@ -95,6 +105,12 @@ final class PromptSuggestionsModel {
     func setEnabled(_ enabled: Bool) {
         self.enabled = enabled
         preferences?.set(enabled, forKey: "promptSuggestionsEnabled")
+        restart()
+    }
+
+    func setDemoMode(_ enabled: Bool) {
+        guard demoMode != enabled else { return }
+        demoMode = enabled
         restart()
     }
 
@@ -124,7 +140,7 @@ final class PromptSuggestionsModel {
         self.prompt = prompt
         self.context = context
         self.detectedProjectPath = detectedProjectPath
-        let input = SuggestionRequest(projectPath: projectPath, prompt: prompt, context: context)
+        let input = request
         guard input != current else { return }
         restart()
     }
@@ -139,9 +155,9 @@ final class PromptSuggestionsModel {
         message = nil
         copiedID = nil
         isLoading = false
-        let input = SuggestionRequest(projectPath: projectPath, prompt: prompt, context: context)
+        let input = request
         current = input
-        guard enabled, running, !projectPath.isEmpty else { changed(); return }
+        guard enabled || demoMode, running, !projectPath.isEmpty else { changed(); return }
         let revision = revision
         let fetch = fetch
         isLoading = true

@@ -198,6 +198,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         let state = model.isLoading ? "Analyzing prompt" : model.hasUnreadRecommendation ? (model.hasError ? "Analysis needs attention" : "New recommendations") : "Ready"
         statusItem?.button?.toolTip = "Miracle · \(settings.mode.title) · \(state)"
         statusItem?.button?.setAccessibilityLabel("Miracle, \(settings.mode.title), \(state)")
+        if helpfulPanel?.isBeingDragged == true { return }
         guard settings.mode == .helpful, !model.helpfulDismissed, !popover.isShown,
               settingsWindow?.isVisible != true, setupWindow?.isVisible != true,
               model.result != nil || model.hasError || model.suggestions.response?.status == "ready",
@@ -214,6 +215,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             let window = RecommendationPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
             window.title = "Miracle Recommendations"
             window.isFloatingPanel = true
+            window.isMovable = true
             window.level = .floating
             window.hidesOnDeactivate = false
             window.becomesKeyOnlyIfNeeded = true
@@ -226,7 +228,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             helpfulPanel = window
         }
         let height = model.hasError ? 180.0 : min(560, 300 + Double(model.result?.skills.count ?? 0) * 64 + (model.suggestions.response?.status == "ready" ? 240 : 0))
-        helpfulPanel?.setFrame(PanelPlacement.frame(above: anchor, size: CGSize(width: 420, height: height), visibleFrame: screen.visibleFrame.insetBy(dx: 8, dy: 8)), display: true)
+        helpfulPanel?.place(above: anchor, size: CGSize(width: 420, height: height), visibleFrame: screen.visibleFrame.insetBy(dx: 8, dy: 8))
         // orderFront leaves the host's prompt as the key input. Never activate here.
         helpfulPanel?.orderFrontRegardless()
     }
