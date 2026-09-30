@@ -1,30 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import { catalog } from './catalog.js';
-
-const rules = [
-  ['nextjs', /\bnext(?:\.?js)?\b/i], ['react', /\breact\b|\bnext\.?js\b/i],
-  ['swift', /\bswift(?:ui)?\b|\bappkit\b|\bmacos\b/i],
-  ['postgres', /\bpostgres(?:ql)?\b|\bsupabase\b/i],
-  ['database', /\bdatabase\b|\bsql\b|\bpostgres(?:ql)?\b|\bsupabase\b/i],
-  ['stripe', /\bstripe\b/i], ['python', /\bpython\b/i],
-  ['performance', /\bslow\b|\blag(?:gy)?\b|\bperformance\b|\boptimi[sz]e\b|\brendering\b/i],
-  ['debugging', /\bdebug\b|\bbug\b|\bcrash\b|\bbroken\b|\bfix\b|\bwhy\b|\bfail(?:s|ing|ure)?\b/i],
-  ['testing', /\btests?\b|\btesting\b|\btdd\b/i],
-  ['accessibility', /\baccessib\w*\b|\bvoiceover\b|\bwcag\b/i],
-  ['design', /\bdesign\b|\bui\b|\blayout\b|\blanding page\b/i],
-  ['frontend', /\breact\b|\bnext\.?js\b|\bcss\b|\bhtml\b|\bfrontend\b|\bweb\b|\blanding page\b/i],
-];
-const stop = new Set(['the', 'and', 'for', 'with', 'this', 'that', 'from', 'best', 'practices', 'skills', 'skill', 'vercel', 'labs', 'agent']);
-const words = s => s.toLowerCase().replaceAll('next.js', 'nextjs').split(/[^a-z0-9]+/).filter(x => x.length > 2 && !stop.has(x));
+import { signals, capabilities, domains, compatible, label } from './signals.js';
+import { promptCriteria, recommendSkills } from './criteria.js';
+import { readLibrary } from './skill-library.js';
 
 export function classify(prompt) {
-  const tags = rules.filter(([, regex]) => regex.test(prompt)).map(([tag]) => tag);
+  const tags = signals(prompt, { task: true });
   const intent = tags.includes('debugging') ? 'debug' : tags.includes('performance') ? 'optimize' : tags.includes('design') ? 'design' : tags.includes('testing') ? 'test' : 'general';
   const effort = /\bmigrat\w*\b|\barchitect\w*\b|\brace condition\b|\bdistributed\b/i.test(prompt) ? 'high' : tags.length > 0 || prompt.length > 600 ? 'medium' : 'low';
-  const domains = tags.filter(t => ['react', 'nextjs', 'swift', 'postgres', 'stripe', 'python', 'frontend'].includes(t));
-  const topic = tags.includes('performance') ? 'performance' : tags.includes('accessibility') ? 'accessibility' : tags.includes('design') ? 'design' : tags.includes('testing') ? 'testing' : tags.includes('debugging') ? 'debugging' : 'best practices';
+  const taskDomains = tags.filter(t => domains.includes(t) && t !== 'database');
+  const topic = capabilities.find(t => tags.includes(t)) ?? 'best practices';
   // Only controlled topic labels leave this API, never the raw prompt or extracted secrets.
-  const queries = [...new Set(domains.slice(0, 2).map(d => `${d} ${topic}`))];
+  const queries = [...new Set(taskDomains.slice(0, 2).map(d => `${d.replaceAll('-', ' ')} ${topic}`))];
+  if (!queries.length && tags.includes('database')) queries.push(`database ${topic}`);
   if (queries.length === 0 && topic !== 'best practices') queries.push(topic === 'debugging' ? 'systematic debugging' : topic);
   return { intent, effort, tags, queries: queries.slice(0, 3) };
 }
@@ -68,27 +56,34 @@ export async function discover(queries, { mode = 'live', timeout = 2500, fetchIm
 
 export function rank(candidates, analysis, maxSkills = 3) {
   const requested = new Set(analysis.tags);
-  return candidates.map(skill => {
-    const tokens = new Set([...words(`${skill.name} ${skill.source}`), ...skill.tags]);
-    const matches = [...requested].filter(t => tokens.has(t));
-    // Popularity breaks ties only; it must never create relevance.
-    let relevance = matches.length;
-    const specialty = ['react', 'nextjs', 'swift', 'postgres', 'stripe', 'python'];
-    const candidateDomains = specialty.filter(t => tokens.has(t));
-    if (candidateDomains.length && !candidateDomains.some(t => requested.has(t))) relevance = 0;
-    const capabilities = skill.tags.filter(t => ['performance', 'debugging', 'testing', 'design', 'accessibility'].includes(t));
-    if (capabilities.length && !capabilities.some(t => requested.has(t))) relevance = 0;
-    if (/react-native/.test(skill.name) && requested.has('nextjs')) relevance = 0;
-    if (/frontend|react|nextjs/.test(skill.name) && requested.has('swift') && !requested.has('frontend')) relevance = 0;
-    return { skill, matches, relevance, score: relevance + Math.log10(1 + (skill.installs ?? 0)) / 100 };
+  const taskCapabilities = capabilities.filter(t => requested.has(t));
+  return [...new Map(candidates.map(skill => [skill.id, skill])).values()].map(skill => {
+    const tags = [...new Set([...signals(skill.name), ...skill.tags])];
+    const matches = tags.filter(t => requested.has(t));
+    const matchedCapabilities = matches.filter(t => capabilities.includes(t));
+    const matchedDomains = matches.filter(t => domains.includes(t));
+    const candidateCapabilities = tags.filter(t => capabilities.includes(t));
+    // A framework name alone does not prove usefulness for a specific task.
+    // Prefer fewer recommendations to padding the list with adjacent skills.
+    let relevance = matchedCapabilities.length * 3 + matchedDomains.length;
+    if (!compatible(tags, requested)) relevance = 0;
+    // Unknown names like "optimize" do not establish platform independence.
+    // Only locally annotated, general-purpose catalog skills can omit scope.
+    if (!tags.some(t => domains.includes(t)) && !skill.tags.length) relevance = 0;
+    if (taskCapabilities.length && !matchedCapabilities.length) relevance = 0;
+    if (!taskCapabilities.length && candidateCapabilities.length) relevance = 0;
+    return { skill, matches, matchedCapabilities, matchedDomains, relevance };
   }).filter(s => s.relevance > 0)
-    .sort((a, b) => b.score - a.score || a.skill.id.localeCompare(b.skill.id))
-    .slice(0, maxSkills).map(({ skill, matches, relevance }) => ({
+    // Popularity only breaks equal-relevance ties and never creates relevance.
+    .sort((a, b) => b.relevance - a.relevance || (b.skill.installs ?? 0) - (a.skill.installs ?? 0) || a.skill.id.localeCompare(b.skill.id))
+    .slice(0, maxSkills).map(({ skill, matches, matchedCapabilities, matchedDomains }) => ({
       id: skill.id, name: skill.name, source: skill.source,
       description: skill.description, url: skill.url, repositoryUrl: skill.repositoryUrl,
       installs: skill.installs, provenance: skill.provenance,
-      reason: `Matches the task's ${matches.join(', ')} needs.`,
-      confidence: Math.min(0.95, 0.45 + relevance * 0.12),
+      reason: matchedCapabilities.length
+        ? `${matchedDomains.length ? `Matches ${matchedDomains.slice(0, 2).map(label).join(' and ')}; focuses` : 'Focuses'} on ${matchedCapabilities.map(label).join(' and ')}.`
+        : `Matches the task's ${matchedDomains.map(label).join(' and ')} context.`,
+      confidence: Math.min(0.95, 0.45 + matches.length * 0.12),
       security: 'not-audited',
     }));
 }
@@ -96,6 +91,25 @@ export function rank(candidates, analysis, maxSkills = 3) {
 export async function analyze(request, options = {}) {
   const start = performance.now();
   const analysis = classify(request.prompt);
+  if (['hybrid', 'installed'].includes(options.mode)) {
+    const library = options.library ?? await readLibrary();
+    const task = promptCriteria(request.prompt);
+    const queries = task.abstain || request.maxSkills === 0 ? [] : task.scopes.slice(0, 2).map(scope => `${scope.replaceAll('-', ' ')} ${task.purposes[0] ?? 'best practices'}`);
+    const discovery = options.mode === 'hybrid' && queries.length
+      ? await discover(queries, { ...options, mode: 'live' }) : { candidates: [], source: 'none', warnings: [] };
+    const imported = options.mode === 'installed' ? library.skills.filter(skill => skill.provenance === 'installed') : library.skills;
+    const candidates = [...imported, ...discovery.candidates.filter(skill => !imported.some(local => local.id === skill.id))];
+    const skills = recommendSkills(candidates, request.prompt, request.maxSkills ?? 3);
+    return {
+      schemaVersion: '1.0', requestId: randomUUID(),
+      analysis: { intent: analysis.intent, tags: [...new Set([...task.scopes, ...task.purposes])], queries: options.mode === 'hybrid' ? queries : [] },
+      effort: { level: analysis.effort, reason: analysis.effort === 'high' ? 'The prompt suggests cross-cutting or complex work.' : 'Effort reflects task complexity, independently of skill fit.' },
+      model: { profile: analysis.effort === 'high' ? 'capable' : analysis.effort === 'low' ? 'fast' : 'balanced', reason: 'Choose an available model in your AI app.' },
+      skills,
+      meta: { source: options.mode === 'hybrid' ? 'hybrid' : 'installed', ranking: 'criteria-v2', importedCount: imported.length,
+        durationMs: Math.round(performance.now() - start), warnings: [...library.warnings, ...discovery.warnings] },
+    };
+  }
   const discovery = await discover(analysis.queries, options);
   return {
     schemaVersion: '1.0', requestId: randomUUID(),

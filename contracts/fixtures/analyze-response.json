@@ -32,9 +32,45 @@
       "repositoryUrl": "https://github.com/vercel-labs/agent-skills",
       "installs": null,
       "provenance": "catalog",
-      "reason": "Matches the task's nextjs, react, performance, frontend needs.",
-      "confidence": 0.9299999999999999,
-      "security": "not-audited"
+      "reason": "Matches performance for React / Next.js.",
+      "confidence": 0.8,
+      "security": "not-audited",
+      "evaluation": {
+        "score": 80,
+        "threshold": 60,
+        "criteria": [
+          {
+            "id": "purpose",
+            "label": "Task purpose",
+            "maximum": 30,
+            "points": 30
+          },
+          {
+            "id": "scope",
+            "label": "Platform or artifact",
+            "maximum": 25,
+            "points": 25
+          },
+          {
+            "id": "trigger",
+            "label": "Description evidence",
+            "maximum": 25,
+            "points": 15
+          },
+          {
+            "id": "specificity",
+            "label": "Specialist fit",
+            "maximum": 10,
+            "points": 10
+          },
+          {
+            "id": "availability",
+            "label": "Available instructions",
+            "maximum": 10,
+            "points": 0
+          }
+        ]
+      }
     }
   ],
   "meta": {

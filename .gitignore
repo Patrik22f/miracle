@@ -9,3 +9,4 @@ build/
 *.xcuserstate
 xcuserdata/
 *.log
+.preflight/

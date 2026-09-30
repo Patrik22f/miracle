@@ -1,9 +1,9 @@
 # A one-minute demo
 
 1. Start `npm start` and open the built Preflight app.
-2. Enable Accessibility once. Focus Cursor's prompt input.
+2. Enable Accessibility once and leave **Live capture** on. Focus Cursor's prompt input.
 3. Type: “Optimize this Next.js page. It is slow when rendering 500 products.”
-4. Press **⌥⌘Return**. If AX cannot read that input, paste the prompt into Preflight.
+4. Show the text appearing automatically in **Your prompt**, then click **Analyze prompt**. If AX cannot read that input, paste the prompt into Preflight. **⌥⌘Return** remains the one-time capture-and-analyze shortcut.
 5. Show the recommended React skill, explanation, and secondary effort/model suggestions.
 6. Select the skill and click **Copy with skills**. Paste back into Cursor and review before sending.
 7. Explain: “I didn't search for this skill. I just wrote my prompt.”
@@ -13,7 +13,11 @@ Fallback: menu bar → Try demo. This is labeled fixture data and works without 
 ## Manual acceptance before pitching
 
 - Menu item and global shortcut open the same overlay.
-- Capture occurs before the overlay takes focus; selected text wins.
+- Live capture follows the complete field while typing, pasting, deleting, and switching apps without stealing focus.
+- The shortcut captures before the overlay takes focus; selected text wins and live capture pauses.
+- Editing inside Preflight pauses capture; resuming it follows new external text.
+- Empty editable fields clear the captured prompt; unsupported controls preserve the last snapshot with a fallback status.
+- Permission grants and revocations are reflected without relaunching.
 - Empty, inaccessible, and secure inputs have a useful fallback.
 - Permission denial does not prevent manual paste.
 - Loading can be canceled; editing clears stale results.
@@ -26,7 +30,7 @@ Fallback: menu bar → Try demo. This is labeled fixture data and works without 
 
 **UI lane:** validate Cursor input capture on the demo machine → refine overlay/keyboard flow → explicit project selection and installation UI.
 
-**Intelligence lane:** ten-prompt relevance evaluation → fetch top candidates' SKILL.md with bounded public-source requests → optional LLM reranker with schema validation, timeout, and deterministic fallback.
+**Intelligence lane:** [installed and public imports plus explainable criteria](SKILL_MATCHING.md) are implemented. The thirty-prompt evaluation and live regression checks are in place. Next: extend prerequisite coverage and evaluate unfamiliar task vocabulary against real demo failures; consider a bounded optional semantic reranker only after those cases are measured.
 
 **Together:** one supported Cursor install-and-send flow. Review the full skill package, avoid shell interpolation of remote metadata, require a selected project directory, and confirm host skill loading before presenting “Apply & Send”.
 
