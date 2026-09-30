@@ -11,6 +11,7 @@ final class AppModel {
     var isLoading = false
     var message: String?
     private(set) var demoMode = false
+    private(set) var demoInstalledSkills: Set<String> = []
     private(set) var liveCaptureEnabled: Bool
     private(set) var captureStatus: CaptureStatus = .waiting
     private(set) var automaticRecommendationsEnabled = true
@@ -18,7 +19,7 @@ final class AppModel {
     var hasUnreadRecommendation = false
     var helpfulDismissed = false
     var hasError = false
-    var targetApp: HostApp? { demoMode ? .cursor : HostApp.detect(source) }
+    var targetApp: HostApp? { HostApp.detect(source) }
     @ObservationIgnored var presentationChanged: () -> Void = {}
     @ObservationIgnored var permissionChanged: (Bool) -> Void = { _ in }
     @ObservationIgnored private let monitor: LivePromptMonitor
@@ -41,7 +42,7 @@ final class AppModel {
         monitor.onPermission = { [weak self] granted in self?.permissionChanged(granted) }
         monitor.isEnabled = { [weak self] in
             guard let self else { return false }
-            return self.liveCaptureEnabled && !self.demoMode && !self.captureSuspended
+            return self.liveCaptureEnabled && !self.captureSuspended
         }
     }
 
@@ -78,7 +79,7 @@ final class AppModel {
     private func synchronizeCapture() {
         // Keep checking permission while paused or in setup, without reading text.
         monitor.stop()
-        if !liveCaptureEnabled || demoMode { captureStatus = .paused }
+        if !liveCaptureEnabled { captureStatus = .paused }
         else if captureSuspended { captureStatus = .reviewing }
         else { captureStatus = AccessibilityPermission.isGranted ? .waiting : .permissionRequired }
         if captureStarted { monitor.start() }
@@ -86,7 +87,7 @@ final class AppModel {
     }
 
     func receiveCapture(_ reading: CaptureReading) {
-        guard liveCaptureEnabled, !demoMode, !captureSuspended else { return }
+        guard liveCaptureEnabled, !captureSuspended else { return }
         captureStatus = reading.status
         switch reading {
         case .captured(let captured): applyCapture(captured)
@@ -125,7 +126,19 @@ final class AppModel {
         activeSnapshot = nil
         invalidate()
         demoMode = enabled
+        demoInstalledSkills = []
+        if !enabled {
+            prompt = ""
+            source = nil
+            lastFieldID = nil
+        }
         synchronizeCapture()
+    }
+
+    func installDemoSkills(_ ids: Set<String>) {
+        guard demoMode else { return }
+        demoInstalledSkills.formUnion(ids.intersection(Set(DemoCatalog.skills.map(\.id))))
+        presentationChanged()
     }
 
     func cancel() {
@@ -162,7 +175,7 @@ final class AppModel {
             }
             return
         }
-        guard liveCaptureEnabled, automaticRecommendationsEnabled, !demoMode, !captureSuspended else { return }
+        guard liveCaptureEnabled, automaticRecommendationsEnabled, !captureSuspended else { return }
         if let activeSnapshot, snapshot.matchesContent(of: activeSnapshot) {
             self.activeSnapshot = snapshot
             presentationChanged()
@@ -229,7 +242,7 @@ final class AppModel {
                 if delay != .zero { try await Task.sleep(for: delay) }
                 try Task.checkCancellation()
                 let response: AnalyzeResponse
-                if useDemo { response = try .demo() }
+                if useDemo { response = DemoCatalog.analyze(text) }
                 else { response = try await analyzePrompt(text, app) }
                 guard !Task.isCancelled, let self, self.revision == current else { return }
                 self.result = response
@@ -253,8 +266,7 @@ final class AppModel {
         setDemoMode(true)
         source = nil
         lastFieldID = nil
-        prompt = "Optimize this Next.js page. It is slow when rendering 500 products."
-        analyze()
+        prompt = ""
     }
 
     func copy(includeSkills: Bool) {

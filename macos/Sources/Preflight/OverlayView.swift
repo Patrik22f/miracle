@@ -8,6 +8,7 @@ struct OverlayView: View {
     let installer: SkillInstallModel
     var openSettings: () -> Void = {}
     var modeChanged: () -> Void = {}
+    var openDemo: () -> Void = {}
     @State private var showingLibrary = false
 
     var body: some View {
@@ -15,7 +16,7 @@ struct OverlayView: View {
             HStack(spacing: 10) {
                 MiracleMark().foregroundStyle(.tint)
                 Text("Miracle").font(.title2.weight(.semibold))
-                if model.demoMode { Text("Demo").font(.caption).foregroundStyle(.secondary) }
+                if model.demoMode { Button("Shopfront", action: openDemo).font(.caption) }
                 Spacer()
                 Button { showingLibrary = true } label: { Image(systemName: "books.vertical") }
                     .accessibilityLabel("Skill library")
@@ -54,13 +55,13 @@ struct OverlayView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     if let result = model.result, let host = model.targetApp {
-                        ModelRecommendationView(result: result, host: host, settings: settings, catalog: catalog)
+                        ModelRecommendationView(result: result, host: host, settings: settings, catalog: catalog, demo: model.demoMode)
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Text("Skills").font(.headline)
                                 Text("\(result.skills.count)").font(.caption).foregroundStyle(.secondary)
                                 Spacer()
-                                Text(model.demoMode ? "Demo" : result.sourceLabel).font(.caption).foregroundStyle(.secondary)
+                                Text(result.sourceLabel).font(.caption).foregroundStyle(.secondary)
                             }.padding(.bottom, 4)
                             if result.skills.isEmpty { Text("No additional skills").font(.callout).foregroundStyle(.secondary) }
                             ForEach(result.skills) { skill in
@@ -83,7 +84,7 @@ struct OverlayView: View {
                         .font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     InstallSelectedSkillsButton(skills: result.skills, selected: model.selected, host: model.targetApp,
-                        settings: settings, installer: installer, openSettings: openSettings)
+                        settings: settings, installer: installer, openSettings: openSettings, demoModel: model.demoMode ? model : nil)
                 }
             }
         }
@@ -91,7 +92,7 @@ struct OverlayView: View {
         .frame(minWidth: 520, idealWidth: 560)
         .background(Color(nsColor: .windowBackgroundColor))
         .sheet(isPresented: $showingLibrary) {
-            SkillLibraryView(host: model.targetApp, settings: settings, installer: installer, openSettings: openSettings)
+            SkillLibraryView(host: model.targetApp, settings: settings, installer: installer, openSettings: openSettings, demoModel: model.demoMode ? model : nil)
         }
     }
 

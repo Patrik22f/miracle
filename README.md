@@ -29,13 +29,13 @@ With automatic recommendations enabled, recognized prompt labels trigger analysi
 
 Open **Skill library** to browse or refresh imported skills. In recommendations, select skills with the checkboxes and use **Install selected skills**, or install an individual package from its row. Settings chooses installation for this Mac or an explicit project folder. The original prompt stays in the AI app; Miracle does not submit it or change the host's model. See [the import and matching criteria](docs/SKILL_MATCHING.md).
 
-For a UI-only demo, choose **Try demo** from the menu bar. Demo mode uses the bundled response and needs no backend. Turn Demo mode off for real analysis. The API can also work offline with `SKILLS_MODE=offline npm start`.
+For a presentation, enable **Demo mode** in Settings or choose **Try demo** from the menu bar. The Shopfront website opens in a window that stays open while you type in Cursor. Its source and two prepared prompts are bundled in `macos/Sources/Preflight/Resources/Demo/`. Miracle captures the real coding app's prompt, then shows offline recommendations through Stealth or Helpful. Presentation install actions only change session state. Turn Demo mode off for real analysis. See [presentation details](macos/README.md#presentation-from-a-real-coding-app). The API can also work offline with `SKILLS_MODE=offline npm start`.
 
 ## What's working
 
 - Native SwiftUI review, Stealth menu-bar notifications, Helpful prompt-anchored recommendations, first-run onboarding and a dedicated Settings window.
 - Automatic capture of supported focused prompt inputs, app detection, secure/read-only field exclusion and a single-line prompt preview.
-- Background AX reads, bounded timeouts, serial sampling, permission recovery, stale-read rejection and capture suspension during setup, settings and demo mode.
+- Background AX reads, bounded timeouts, serial sampling, permission recovery, stale-read rejection and capture suspension during setup and settings, with local analysis for demo mode.
 - `POST /analyze` with request validation, bounded input, timeouts, errors, and stable JSON shapes.
 - Public skills.sh search, normalization, deduplication, relevance ranking, up to three results, and a valid “no skill needed” result.
 - Installed and public `SKILL.md` imports, a searchable library, explicit provenance, and refresh warnings.

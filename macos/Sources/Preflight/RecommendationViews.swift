@@ -37,12 +37,13 @@ struct ModelRecommendationView: View {
     let settings: AppSettings
     let catalog: ModelCatalog
     var compact = false
+    var demo = false
 
-    private var models: [RecommendedModel] { settings.availableModels(for: host, catalog: catalog) }
+    private var models: [RecommendedModel] { demo ? catalog.models(for: host) : settings.availableModels(for: host, catalog: catalog) }
     private var recommendation: RecommendedModel? { ModelRecommendation.choose(from: models, profile: result.model.profile) }
     private var efforts: [String] {
         guard let recommendation else { return [] }
-        if host == .cursor, !settings.cursorCustomEffort {
+        if host == .cursor, !demo, !settings.cursorCustomEffort {
             return recommendation.id.hasPrefix("grok-") ? ["medium"] : []
         }
         return recommendation.efforts
@@ -87,9 +88,17 @@ struct SkillInstallButton: View {
     let settings: AppSettings
     let installer: SkillInstallModel
     var openSettings: (() -> Void)?
+    var demoModel: AppModel? = nil
 
     var body: some View {
-        if let host, let root = settings.installRoot(for: host) {
+        if let demoModel {
+            if demoModel.demoInstalledSkills.contains(skill.id) {
+                Label("Installed", systemImage: "checkmark").font(.caption).foregroundStyle(.secondary)
+            } else {
+                Button("Install") { demoModel.installDemoSkills([skill.id]) }
+                    .controlSize(.small).disabled(!demoModel.demoMode).accessibilityLabel("Install \(skill.name)")
+            }
+        } else if let host, let root = settings.installRoot(for: host) {
             switch installer.state(skill, root: root) {
             case .installing:
                 HStack(spacing: 6) { ProgressView().controlSize(.mini); Text("Installing…") }.font(.caption)
@@ -116,11 +125,20 @@ struct InstallSelectedSkillsButton: View {
     let settings: AppSettings
     let installer: SkillInstallModel
     var openSettings: (() -> Void)?
+    var demoModel: AppModel? = nil
 
     private var chosen: [InstallableSkill] { skills.filter { selected.contains($0.id) }.map(InstallableSkill.init) }
 
     var body: some View {
-        if let host, let root = settings.installRoot(for: host) {
+        if let demoModel {
+            if !chosen.isEmpty, chosen.allSatisfy({ demoModel.demoInstalledSkills.contains($0.id) }) {
+                Label("Selected skills installed", systemImage: "checkmark.circle.fill")
+                    .font(.callout).foregroundStyle(.secondary)
+            } else {
+                Button("Install selected skills") { demoModel.installDemoSkills(Set(chosen.map(\.id))) }
+                    .buttonStyle(.borderedProminent).disabled(chosen.isEmpty || !demoModel.demoMode)
+            }
+        } else if let host, let root = settings.installRoot(for: host) {
             let states = chosen.map { installer.state($0, root: root) }
             if states.contains(.installing) {
                 HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Installing selected skills…") }
@@ -154,7 +172,7 @@ struct RecommendedSkillRow: View {
                     if enabled { model.selected.insert(skill.id) } else { model.selected.remove(skill.id) }
                 })) { Text(skill.name).font(.callout.weight(.medium)).lineLimit(2) }.toggleStyle(.checkbox)
                 Spacer(minLength: 8)
-                SkillInstallButton(skill: InstallableSkill(skill), host: model.targetApp, settings: settings, installer: installer, openSettings: openSettings)
+                SkillInstallButton(skill: InstallableSkill(skill), host: model.targetApp, settings: settings, installer: installer, openSettings: openSettings, demoModel: model.demoMode ? model : nil)
             }
             if !compact {
                 Text(skill.reason).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)

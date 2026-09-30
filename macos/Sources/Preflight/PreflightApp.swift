@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     private var settingsWindow: NSWindow?
     private var helpfulPanel: RecommendationPanel?
     private var setupWindow: NSWindow?
+    private var demoWorkspace: DemoWorkspace?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -26,7 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         badge.isHidden = true
         item.button?.addSubview(badge)
         statusItem = item
-        popover.behavior = .transient
+        popover.behavior = .applicationDefined
         popover.delegate = self
         model.presentationChanged = { [weak self] in self?.refreshPresentation() }
         settings.permissionGranted = AXIsProcessTrusted()
@@ -40,7 +41,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
 
     private func reviewView(close: @escaping () -> Void) -> OverlayView {
         OverlayView(model: model, close: close, settings: settings, catalog: catalog, installer: installer,
-                    openSettings: { [weak self] in self?.showSettings() }, modeChanged: { [weak self] in self?.settingsChanged() })
+                    openSettings: { [weak self] in self?.showSettings() }, modeChanged: { [weak self] in self?.settingsChanged() },
+                    openDemo: { [weak self] in self?.demo() })
     }
 
     private func installMainMenu() {
@@ -50,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         application.submenu = applicationMenu
         let settingsItem = add("Settings…", action: #selector(showSettings), to: applicationMenu)
         settingsItem.keyEquivalent = ","
+        add("Demo website…", action: #selector(demo), to: applicationMenu)
         applicationMenu.addItem(.separator())
         let quitItem = add("Quit Miracle", action: #selector(quit), to: applicationMenu)
         quitItem.keyEquivalent = "q"
@@ -86,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         popover.contentSize = NSSize(width: 560, height: height)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         NSApp.activate(ignoringOtherApps: true)
+        popover.contentViewController?.view.window?.hidesOnDeactivate = false
         popover.contentViewController?.view.window?.makeKey()
         model.markRead()
     }
@@ -105,7 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         add(settings.automatic ? "Pause automatic recommendations" : "Resume automatic recommendations", action: #selector(toggleAutomatic), to: menu)
         add("Enable Accessibility…", action: #selector(permission), to: menu)
         add("Settings…", action: #selector(showSettings), to: menu)
-        add("Try demo", action: #selector(demo), to: menu)
+        add(model.demoMode ? "Open demo website…" : "Try demo…", action: #selector(demo), to: menu)
         menu.addItem(.separator())
         add("Quit Miracle", action: #selector(quit), to: menu)
         guard let button = statusItem?.button else { return }
@@ -156,7 +160,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.contentView = NSHostingView(rootView: SettingsView(settings: settings, model: model, catalog: catalog,
-            changed: { [weak self] in self?.settingsChanged() }, demo: { [weak self] in self?.model.loadDemo() }))
+            changed: { [weak self] in self?.settingsChanged() }, demo: { [weak self] in self?.demo() },
+            endDemo: { [weak self] in self?.endDemo() }))
         settingsWindow = window
         window.center()
         NSApp.activate(ignoringOtherApps: true)
@@ -232,7 +237,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     @objc private func chooseStealth() { settings.mode = .stealth; settingsChanged() }
     @objc private func chooseHelpful() { settings.mode = .helpful; settingsChanged() }
     @objc private func toggleAutomatic() { settings.automatic.toggle(); settingsChanged() }
-    @objc func demo() { model.loadDemo(); showReview() }
+    @objc func demo() {
+        guard settings.completedOnboarding else { showOnboarding(); return }
+        popover.performClose(nil)
+        settingsWindow?.close()
+        if !model.demoMode { model.loadDemo() }
+        do {
+            if demoWorkspace == nil { demoWorkspace = try DemoWorkspace() }
+            demoWorkspace?.show()
+        } catch {
+            model.message = error.localizedDescription
+            model.hasError = true
+            showReview()
+        }
+    }
+
+    private func endDemo() {
+        demoWorkspace?.window.close()
+        demoWorkspace = nil
+        model.setDemoMode(false)
+        synchronizeMonitoring()
+    }
     @objc private func permission() { AccessibilityPermission.request() }
     @objc func quit() { NSApp.terminate(nil) }
     func applicationWillTerminate(_ notification: Notification) {

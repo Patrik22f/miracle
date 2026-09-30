@@ -7,6 +7,7 @@ struct SettingsView: View {
     let catalog: ModelCatalog
     let changed: () -> Void
     let demo: () -> Void
+    let endDemo: () -> Void
     @State private var page = Page.general
     enum Page: String, CaseIterable { case general = "General", models = "Models", skills = "Skills" }
 
@@ -30,8 +31,9 @@ struct SettingsView: View {
                     }
                     Section {
                         Toggle("Demo mode", isOn: Binding(get: { model.demoMode }, set: { enabled in
-                            if enabled { demo() } else { model.setDemoMode(false) }
+                            if enabled { demo() } else { endDemo() }
                         }))
+                        if model.demoMode { Button("Open demo website", action: demo) }
                     }
                 case .models:
                     Section("Available in Cursor") {

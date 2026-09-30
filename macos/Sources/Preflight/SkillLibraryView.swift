@@ -5,6 +5,7 @@ struct SkillLibraryView: View {
     let settings: AppSettings
     let installer: SkillInstallModel
     var openSettings: () -> Void = {}
+    var demoModel: AppModel? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var library: SkillLibrary?
     @State private var query = ""
@@ -29,14 +30,16 @@ struct SkillLibraryView: View {
             }
             HStack {
                 if let library {
-                    Text("\(library.installedCount) installed · \(library.publicCount) public").font(.headline)
+                    Text(demoModel == nil ? "\(library.installedCount) installed · \(library.publicCount) public" : "\(library.count) skills").font(.headline)
                 }
                 Spacer()
                 if isLoading { ProgressView().controlSize(.small) }
-                Button(library?.count == 0 ? "Import skills" : "Refresh imports") { importRevision += 1 }
-                    .disabled(isLoading)
+                if demoModel == nil {
+                    Button(library?.count == 0 ? "Import skills" : "Refresh imports") { importRevision += 1 }
+                        .disabled(isLoading)
+                }
             }
-            TextField("Search imported skills", text: $query)
+            TextField("Search skills", text: $query)
                 .textFieldStyle(.roundedBorder)
             if let error { Text(error).font(.callout).foregroundStyle(.secondary) }
             List(filteredSkills) { skill in
@@ -54,7 +57,7 @@ struct SkillLibraryView: View {
                     HStack {
                         Link("Source", destination: skill.url).font(.caption)
                         Spacer()
-                        SkillInstallButton(skill: InstallableSkill(skill), host: host, settings: settings, installer: installer, openSettings: openSettings)
+                        SkillInstallButton(skill: InstallableSkill(skill), host: host, settings: settings, installer: installer, openSettings: openSettings, demoModel: demoModel)
                     }
                 }.padding(.vertical, 5)
             }
@@ -65,6 +68,7 @@ struct SkillLibraryView: View {
     }
 
     @MainActor private func load(importSkills: Bool) async {
+        if demoModel != nil { library = DemoCatalog.library; return }
         isLoading = true
         error = nil
         defer { isLoading = false }

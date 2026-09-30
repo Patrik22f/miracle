@@ -3,6 +3,7 @@ import SwiftUI
 extension AnalyzeResponse {
     var sourceLabel: String {
         switch meta.source {
+        case "demo": ""
         case "hybrid": "Library + search"
         case "installed": "Installed"
         case "skills.sh": "Live search"
@@ -25,12 +26,11 @@ struct HelpfulView: View {
                 MiracleMark(size: 18).foregroundStyle(.tint)
                 Text("Miracle").font(.headline)
                 Spacer()
-                if model.demoMode { Text("Demo").font(.caption).foregroundStyle(.secondary) }
                 Button(action: dismiss) { Image(systemName: "xmark") }
                     .buttonStyle(.plain).accessibilityLabel("Dismiss recommendation")
             }
             if let result = model.result, let host = model.targetApp {
-                ModelRecommendationView(result: result, host: host, settings: settings, catalog: catalog, compact: true)
+                ModelRecommendationView(result: result, host: host, settings: settings, catalog: catalog, compact: true, demo: model.demoMode)
                 if !result.skills.isEmpty {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 4) {
@@ -50,7 +50,7 @@ struct HelpfulView: View {
                 Spacer()
                 if let result = model.result, !result.skills.isEmpty {
                     InstallSelectedSkillsButton(skills: result.skills, selected: model.selected, host: model.targetApp,
-                        settings: settings, installer: installer)
+                        settings: settings, installer: installer, demoModel: model.demoMode ? model : nil)
                 }
             }
         }

@@ -61,8 +61,8 @@ struct IntegrationTests {
         #expect(!model.hasUnreadRecommendation)
     }
 
-    @Test("Pause, demo and setup reject late automatic responses and samples",
-          arguments: ["live", "automatic", "demo", "setup"])
+    @Test("Pause and setup reject late automatic responses and samples",
+          arguments: ["live", "automatic", "setup"])
     func lateAutomaticResponse(action: String) async throws {
         let deferred = DeferredValue<AnalyzeResponse>()
         let model = AppModel { _, _ in await deferred.request() }
@@ -74,7 +74,6 @@ struct IntegrationTests {
         switch action {
         case "live": model.setLiveCaptureEnabled(false)
         case "automatic": model.setAutomaticRecommendationsEnabled(false)
-        case "demo": model.setDemoMode(true)
         default: model.setCaptureSuspended(true)
         }
         await deferred.resolve(try .demo())
