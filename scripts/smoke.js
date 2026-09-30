@@ -8,4 +8,5 @@ assert.equal(response.status, 200);
 const data = await response.json();
 assert.equal(data.schemaVersion, '1.0');
 assert.ok(data.skills.some(s => s.name === 'vercel-react-best-practices'));
+assert.ok(!data.skills.some(s => /clerk|auth|native|expo|deploy/.test(s.name)), 'Performance prompt received an unrelated skill');
 console.log(JSON.stringify({ source: data.meta.source, skills: data.skills.map(s => s.name), durationMs: data.meta.durationMs }, null, 2));

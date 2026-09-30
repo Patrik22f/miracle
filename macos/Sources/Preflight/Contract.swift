@@ -28,6 +28,7 @@ struct AnalyzeResponse: Codable, Sendable {
         let ranking: String
         let durationMs: Int
         let warnings: [String]
+        var importedCount: Int? = nil
     }
     struct Skill: Codable, Identifiable, Sendable {
         let id: String
@@ -41,6 +42,18 @@ struct AnalyzeResponse: Codable, Sendable {
         let reason: String
         let confidence: Double
         let security: String
+        var evaluation: Evaluation? = nil
+    }
+    struct Evaluation: Codable, Sendable {
+        let score: Int
+        let threshold: Int
+        let criteria: [Criterion]
+    }
+    struct Criterion: Codable, Identifiable, Sendable {
+        let id: String
+        let label: String
+        let maximum: Int
+        let points: Int
     }
 
     static func demo() throws -> Self {
@@ -64,6 +77,22 @@ enum ClientError: LocalizedError {
 struct APIClient: Sendable {
     var endpoint = URL(string: "http://127.0.0.1:8787/analyze")!
 
+    func library(importSkills: Bool = false) async throws -> SkillLibrary {
+        let path = importSkills ? "skills/import" : "skills"
+        var request = URLRequest(url: endpoint.deletingLastPathComponent().appendingPathComponent(path))
+        request.timeoutInterval = 30
+        if importSkills {
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = Data("{}".utf8)
+        }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            throw ClientError.message("Could not load the skill library. Check that the local backend is running.")
+        }
+        return try JSONDecoder().decode(SkillLibrary.self, from: data)
+    }
+
     func analyze(prompt: String, app: String?) async throws -> AnalyzeResponse {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
@@ -79,5 +108,24 @@ struct APIClient: Sendable {
             throw ClientError.message("The API contract changed. Update the client and backend together.")
         }
         return result
+    }
+}
+
+struct SkillLibrary: Decodable, Sendable {
+    let count: Int
+    let installedCount: Int
+    let publicCount: Int
+    let warnings: [String]
+    let skills: [Entry]
+
+    struct Entry: Decodable, Identifiable, Sendable {
+        let id: String
+        let name: String
+        let description: String
+        let source: String
+        let provenance: String
+        let url: URL
+        let scopes: [String]
+        let purposes: [String]
     }
 }

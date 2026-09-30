@@ -7,7 +7,10 @@
   "scripts": {
     "dev": "node --watch api/src/server.js",
     "start": "node api/src/server.js",
+    "skills:import": "node scripts/import-skills.js",
     "test": "node --test api/test/*.test.js",
+    "eval": "node scripts/evaluate.js",
+    "eval:live": "node scripts/evaluate-live.js",
     "macos:build": "bash scripts/build-macos.sh",
     "macos:test": "swift test --package-path macos --build-system native",
     "check": "npm test && npm run macos:test",

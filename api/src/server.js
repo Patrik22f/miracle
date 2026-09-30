@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { analyze } from './analyze.js';
+import { readLibrary, importSkills, saveLibrary, librarySummary } from './skill-library.js';
 
 export function validateRequest(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return 'Expected a JSON object.';
@@ -12,6 +13,8 @@ export function validateRequest(value) {
 }
 
 export function createServer(options = {}) {
+  let importing;
+  const currentLibrary = () => options.library ? Promise.resolve(options.library) : readLibrary();
   return http.createServer({ requestTimeout: 10000, headersTimeout: 10000 }, async (req, res) => {
     const json = (status, payload) => {
       res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
@@ -21,6 +24,32 @@ export function createServer(options = {}) {
     // Native-only local API: reject browser origins before reading any prompt.
     if (req.headers.origin || !/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(req.headers.host ?? '')) return fail(403, 'FORBIDDEN', 'Use the native client or local CLI.');
     if (req.method === 'GET' && req.url === '/health') return json(200, { status: 'ok', schemaVersion: '1.0' });
+    if (req.method === 'GET' && req.url === '/skills') {
+      try { return json(200, librarySummary(await currentLibrary())); }
+      catch { return fail(500, 'LIBRARY_ERROR', 'Could not read the skill library. Run npm run skills:import.'); }
+    }
+    if (req.method === 'POST' && req.url === '/skills/import') {
+      if (!(req.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) return fail(415, 'CONTENT_TYPE', 'Use application/json.');
+      try {
+        const chunks = []; let size = 0;
+        for await (const chunk of req) {
+          size += chunk.length;
+          if (size > 1024) return fail(413, 'TOO_LARGE', 'Import request exceeds 1 KiB.');
+          chunks.push(chunk);
+        }
+        const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        if (!body || Array.isArray(body) || typeof body !== 'object' || Object.keys(body).length) return fail(400, 'INVALID_REQUEST', 'Import accepts an empty object; configure roots locally.');
+      } catch { return fail(400, 'INVALID_JSON', 'Body must be an empty JSON object.'); }
+      // Roots and URLs come only from the locally configured library, never an HTTP body.
+      if (!importing) importing = (async () => {
+        const previous = await currentLibrary();
+        const library = await importSkills({ roots: previous.roots, includePublic: previous.includePublic, previous });
+        await saveLibrary(library);
+        return library;
+      })().finally(() => { importing = null; });
+      try { return json(200, librarySummary(await importing)); }
+      catch { return fail(500, 'IMPORT_ERROR', 'Skill import failed. Run npm run skills:import to inspect it.'); }
+    }
     if (req.method !== 'POST' || req.url !== '/analyze') return fail(404, 'NOT_FOUND', 'Use POST /analyze.');
     if (!(req.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) return fail(415, 'CONTENT_TYPE', 'Use application/json.');
     try {
@@ -47,8 +76,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   try { process.loadEnvFile('.env'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   const port = Number(process.env.PORT ?? 8787);
   const timeout = Number(process.env.SKILLS_TIMEOUT_MS ?? 2500);
-  const mode = process.env.SKILLS_MODE ?? 'live';
-  if (!Number.isInteger(port) || port < 1 || port > 65535 || !Number.isFinite(timeout) || timeout < 100 || timeout > 10000 || !['live', 'offline'].includes(mode)) throw new Error('Invalid PORT, SKILLS_TIMEOUT_MS, or SKILLS_MODE.');
+  const mode = process.env.SKILLS_MODE ?? 'hybrid';
+  if (!Number.isInteger(port) || port < 1 || port > 65535 || !Number.isFinite(timeout) || timeout < 100 || timeout > 10000 || !['hybrid', 'installed', 'live', 'offline'].includes(mode)) throw new Error('Invalid PORT, SKILLS_TIMEOUT_MS, or SKILLS_MODE.');
   const server = createServer({ mode, timeout });
   server.on('error', error => { console.error(`Cannot start Preflight: ${error.message}`); process.exitCode = 1; });
   server.listen(port, '127.0.0.1', () => console.log(`Preflight API: http://127.0.0.1:${port} (${mode})`));
