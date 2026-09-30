@@ -1,0 +1,5 @@
+{
+  "prompt": "Optimize this Next.js page. It is slow when rendering 500 products.",
+  "app": "Cursor",
+  "maxSkills": 3
+}

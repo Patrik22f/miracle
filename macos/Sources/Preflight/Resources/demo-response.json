@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "1.0",
+  "requestId": "demo-response-v1",
+  "analysis": {
+    "intent": "optimize",
+    "tags": [
+      "nextjs",
+      "react",
+      "performance",
+      "frontend"
+    ],
+    "queries": [
+      "nextjs performance",
+      "react performance"
+    ]
+  },
+  "effort": {
+    "level": "medium",
+    "reason": "This task benefits from investigation and verification."
+  },
+  "model": {
+    "profile": "balanced",
+    "reason": "Advisory capability profile; choose an available model in your AI app."
+  },
+  "skills": [
+    {
+      "id": "vercel-labs/agent-skills/vercel-react-best-practices",
+      "name": "vercel-react-best-practices",
+      "source": "vercel-labs/agent-skills",
+      "description": "React and Next.js performance patterns.",
+      "url": "https://skills.sh/vercel-labs/agent-skills/vercel-react-best-practices",
+      "repositoryUrl": "https://github.com/vercel-labs/agent-skills",
+      "installs": null,
+      "provenance": "catalog",
+      "reason": "Matches the task's nextjs, react, performance, frontend needs.",
+      "confidence": 0.9299999999999999,
+      "security": "not-audited"
+    }
+  ],
+  "meta": {
+    "source": "catalog",
+    "ranking": "heuristic-v1",
+    "durationMs": 0,
+    "warnings": [
+      "Offline mode: using the bundled public-skill catalog."
+    ]
+  }
+}

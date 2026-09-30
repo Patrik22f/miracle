@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://preflight.local/contracts/analyze-response.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "requestId",
+    "analysis",
+    "effort",
+    "model",
+    "skills",
+    "meta"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "requestId": {
+      "type": "string"
+    },
+    "analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "intent",
+        "tags",
+        "queries"
+      ],
+      "properties": {
+        "intent": {
+          "type": "string",
+          "enum": [
+            "debug",
+            "optimize",
+            "design",
+            "test",
+            "general"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "queries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 3
+        }
+      }
+    },
+    "effort": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "level",
+        "reason"
+      ],
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "reason"
+      ],
+      "properties": {
+        "profile": {
+          "type": "string",
+          "enum": [
+            "fast",
+            "balanced",
+            "capable"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "source",
+          "description",
+          "url",
+          "repositoryUrl",
+          "installs",
+          "provenance",
+          "reason",
+          "confidence",
+          "security"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "repositoryUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "installs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "provenance": {
+            "type": "string",
+            "enum": [
+              "skills.sh",
+              "catalog"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "security": {
+            "type": "string",
+            "enum": [
+              "not-audited"
+            ]
+          }
+        }
+      },
+      "maxItems": 3
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "ranking",
+        "durationMs",
+        "warnings"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": [
+            "skills.sh",
+            "catalog",
+            "none"
+          ]
+        },
+        "ranking": {
+          "type": "string",
+          "enum": [
+            "heuristic-v1"
+          ]
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
