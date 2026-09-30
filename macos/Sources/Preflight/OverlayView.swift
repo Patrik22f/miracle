@@ -3,6 +3,8 @@ import SwiftUI
 struct OverlayView: View {
     @Bindable var model: AppModel
     let close: () -> Void
+    let settings: AppSettings
+    var openSettings: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -13,15 +15,16 @@ struct OverlayView: View {
                     Text("The right skills, before you send.").foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text("⌥⌘Return").font(.callout.monospaced()).foregroundStyle(.secondary)
+                Button(action: openSettings) { Label(settings.mode.title, systemImage: settings.mode.symbol) }
+                    .buttonStyle(.borderless).help("Change display mode")
             }
             HStack {
                 Text(model.sourceApp.map { "Prompt from \($0)" } ?? "Your prompt").font(.headline)
                 Spacer()
-                Toggle("Demo mode", isOn: Binding(get: { model.demoMode }, set: { model.invalidate(); model.demoMode = $0 }))
+                Toggle("Demo mode", isOn: Binding(get: { model.demoMode }, set: { model.editPrompt(model.prompt); model.demoMode = $0 }))
                     .toggleStyle(.switch).controlSize(.small)
             }
-            TextEditor(text: Binding(get: { model.prompt }, set: { model.invalidate(); model.sourceApp = nil; model.prompt = $0 }))
+            TextEditor(text: Binding(get: { model.prompt }, set: model.editPrompt))
                 .font(.body).frame(minHeight: 90, maxHeight: 120)
                 .padding(6).background(.background, in: RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator))
@@ -43,7 +46,7 @@ struct OverlayView: View {
                         HStack {
                             Text("Recommended skills").font(.headline)
                             Spacer()
-                            Text(model.demoMode ? "Demo fixture" : result.meta.source == "skills.sh" ? "Live search" : "Local catalog")
+                            Text(model.demoMode ? "Demo fixture" : result.sourceLabel)
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         if result.skills.isEmpty {
@@ -69,9 +72,11 @@ struct OverlayView: View {
                             Text("\(result.model.profile.capitalized) model")
                         }.font(.callout)
                         Text("Suggestions only. Set model and effort in your AI app.").font(.caption).foregroundStyle(.secondary)
+                        Text(result.effort.reason).font(.caption).foregroundStyle(.secondary)
+                        Text(result.model.reason).font(.caption).foregroundStyle(.secondary)
                         ForEach(result.meta.warnings, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
                     } else if !model.isLoading {
-                        ContentUnavailableView("Ready when you are", systemImage: "text.magnifyingglass", description: Text("Focus a prompt in another app and press ⌥⌘Return, or paste it above."))
+                        ContentUnavailableView("Ready when you are", systemImage: "text.magnifyingglass", description: Text("Write a prompt in Cursor to get recommendations, use ⌥⌘Return, or paste it above."))
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -87,6 +92,6 @@ struct OverlayView: View {
                 .font(.caption2).foregroundStyle(.secondary)
         }
         .padding(22)
-        .frame(minWidth: 510, idealWidth: 560, minHeight: 670)
+        .frame(minWidth: 510, idealWidth: 560)
     }
 }
