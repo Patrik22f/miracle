@@ -5,6 +5,7 @@ struct AnalyzeRequest: Codable, Sendable {
     let prompt: String
     let app: String?
     var maxSkills = 3
+    var context: ConversationContext? = nil
 }
 
 struct AnalyzeResponse: Codable, Sendable {
@@ -20,6 +21,13 @@ struct AnalyzeResponse: Codable, Sendable {
         let intent: String
         let tags: [String]
         let queries: [String]
+        var context: ContextUsage? = nil
+    }
+    struct ContextUsage: Codable, Sendable {
+        let status: String
+        let source: String?
+        let turnCount: Int
+        let truncated: Bool
     }
     struct Effort: Codable, Sendable { let level: String; let reason: String }
     struct Model: Codable, Sendable { let profile: String; let reason: String }
@@ -43,6 +51,15 @@ struct AnalyzeResponse: Codable, Sendable {
         let confidence: Double
         let security: String
         var evaluation: Evaluation? = nil
+        var knowledge: Knowledge? = nil
+    }
+    struct Knowledge: Codable, Sendable {
+        let version: String
+        let hash: String
+        let method: String
+        let evidenceLines: [Int]
+        let referenceCount: Int
+        let missingReferenceCount: Int
     }
     struct Evaluation: Codable, Sendable {
         let score: Int
@@ -93,12 +110,12 @@ struct APIClient: Sendable {
         return try JSONDecoder().decode(SkillLibrary.self, from: data)
     }
 
-    func analyze(prompt: String, app: String?) async throws -> AnalyzeResponse {
+    func analyze(prompt: String, app: String?, context: ConversationContext? = nil) async throws -> AnalyzeResponse {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 12
-        request.httpBody = try JSONEncoder().encode(AnalyzeRequest(prompt: prompt, app: app))
+        request.httpBody = try JSONEncoder().encode(AnalyzeRequest(prompt: prompt, app: app, context: context))
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw ClientError.message("The API could not analyze this prompt. Check that the local backend is running.")

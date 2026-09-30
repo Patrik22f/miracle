@@ -6,79 +6,130 @@
     "tags": [
       "nextjs",
       "react",
-      "performance",
-      "frontend"
+      "web",
+      "performance"
     ],
-    "queries": [
-      "nextjs performance",
-      "react performance"
-    ]
+    "queries": []
   },
   "effort": {
     "level": "medium",
-    "reason": "This task benefits from investigation and verification."
+    "reason": "Effort reflects task complexity, independently of skill fit."
   },
   "model": {
     "profile": "balanced",
-    "reason": "Advisory capability profile; choose an available model in your AI app."
+    "reason": "Choose an available model in your AI app."
   },
   "skills": [
     {
       "id": "vercel-labs/agent-skills/vercel-react-best-practices",
       "name": "vercel-react-best-practices",
       "source": "vercel-labs/agent-skills",
-      "description": "React and Next.js performance patterns.",
+      "description": "React and Next.js performance optimization.",
       "url": "https://skills.sh/vercel-labs/agent-skills/vercel-react-best-practices",
       "repositoryUrl": "https://github.com/vercel-labs/agent-skills",
       "installs": null,
-      "provenance": "catalog",
-      "reason": "Matches performance for React / Next.js.",
-      "confidence": 0.8,
+      "provenance": "public-import",
       "security": "not-audited",
+      "confidence": 0.79,
+      "reason": "Matches performance for react / nextjs. Instruction evidence: SKILL.md:2, SKILL.md:4.",
       "evaluation": {
-        "score": 80,
-        "threshold": 60,
+        "score": 79,
+        "threshold": 70,
         "criteria": [
           {
             "id": "purpose",
             "label": "Task purpose",
-            "maximum": 30,
-            "points": 30
+            "maximum": 18,
+            "points": 18
           },
           {
             "id": "scope",
-            "label": "Platform or artifact",
-            "maximum": 25,
-            "points": 25
-          },
-          {
-            "id": "trigger",
-            "label": "Description evidence",
-            "maximum": 25,
+            "label": "Framework and platform",
+            "maximum": 15,
             "points": 15
           },
           {
-            "id": "specificity",
-            "label": "Specialist fit",
+            "id": "action",
+            "label": "Requested operation",
             "maximum": 10,
             "points": 10
           },
           {
-            "id": "availability",
-            "label": "Available instructions",
+            "id": "artifact",
+            "label": "Output artifact",
+            "maximum": 7,
+            "points": 5
+          },
+          {
+            "id": "trigger",
+            "label": "Description evidence",
             "maximum": 10,
-            "points": 0
+            "points": 2
+          },
+          {
+            "id": "procedure",
+            "label": "Instruction evidence",
+            "maximum": 12,
+            "points": 3
+          },
+          {
+            "id": "prerequisites",
+            "label": "Workflow prerequisites",
+            "maximum": 5,
+            "points": 5
+          },
+          {
+            "id": "exclusions",
+            "label": "Negative constraints",
+            "maximum": 5,
+            "points": 5
+          },
+          {
+            "id": "agent",
+            "label": "Agent compatibility",
+            "maximum": 5,
+            "points": 5
+          },
+          {
+            "id": "availability",
+            "label": "Instruction availability",
+            "maximum": 5,
+            "points": 3
+          },
+          {
+            "id": "freshness",
+            "label": "Snapshot freshness",
+            "maximum": 3,
+            "points": 3
+          },
+          {
+            "id": "specificity",
+            "label": "Specialist fit",
+            "maximum": 5,
+            "points": 5
           }
         ]
+      },
+      "knowledge": {
+        "version": "knowledge-v1",
+        "hash": "7c17361fb7dd6f9622ce5a9810dfb0ae20d2bd8f4fddbdbc0cd876aa745c727d",
+        "method": "deterministic-content-profile",
+        "evidenceLines": [
+          2,
+          4
+        ],
+        "referenceCount": 0,
+        "missingReferenceCount": 0
       }
     }
   ],
   "meta": {
-    "source": "catalog",
-    "ranking": "heuristic-v1",
+    "source": "library",
+    "ranking": "knowledge-v1",
+    "importedCount": 20,
     "durationMs": 0,
     "warnings": [
-      "Offline mode: using the bundled public-skill catalog."
+      "Demo fixture: illustrative content and scores, not a live recommendation."
     ]
   }
 }

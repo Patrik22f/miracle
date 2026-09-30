@@ -5,6 +5,12 @@ import Observation
 final class AppModel {
     private(set) var prompt = ""
     private(set) var source: PromptSource?
+    private(set) var context: ConversationContext?
+    var contextText: String { context?.text ?? "" }
+    var contextLabel: String {
+        guard let context else { return "Chat context unavailable · Add context" }
+        return context.source == "manual" ? "Added chat context" : "Visible chat context · Review"
+    }
     var sourceApp: String? { source?.name }
     var result: AnalyzeResponse?
     var selected: Set<String> = []
@@ -22,7 +28,7 @@ final class AppModel {
     @ObservationIgnored var permissionChanged: (Bool) -> Void = { _ in }
     @ObservationIgnored private let monitor: LivePromptMonitor
     @ObservationIgnored private let preferences: UserDefaults?
-    @ObservationIgnored private let analyzePrompt: @Sendable (String, String?) async throws -> AnalyzeResponse
+    @ObservationIgnored private let analyzePrompt: @Sendable (String, String?, ConversationContext?) async throws -> AnalyzeResponse
     @ObservationIgnored private(set) var task: Task<Void, Never>?
     private var captureStarted = false
     private var captureSuspended = false
@@ -30,8 +36,8 @@ final class AppModel {
     private var revision = UUID()
 
     init(monitor: LivePromptMonitor = LivePromptMonitor(), preferences: UserDefaults? = nil,
-         analyzePrompt: @escaping @Sendable (String, String?) async throws -> AnalyzeResponse = {
-             try await APIClient().analyze(prompt: $0, app: $1)
+         analyzePrompt: @escaping @Sendable (String, String?, ConversationContext?) async throws -> AnalyzeResponse = {
+             try await APIClient().analyze(prompt: $0, app: $1, context: $2)
          }) {
         self.monitor = monitor
         self.preferences = preferences
@@ -103,11 +109,12 @@ final class AppModel {
             receive(snapshot)
             return
         }
-        guard prompt != captured.text || source != captured.source || lastFieldID != captured.fieldID || activeSnapshot != nil else { return }
+        guard prompt != captured.text || source != captured.source || lastFieldID != captured.fieldID || context != captured.context || activeSnapshot != nil else { return }
         activeSnapshot = nil
         invalidate()
         prompt = captured.text
         source = captured.source
+        context = captured.context
         lastFieldID = captured.fieldID
     }
 
@@ -118,6 +125,13 @@ final class AppModel {
         source = nil
         lastFieldID = nil
         prompt = text
+    }
+
+    func editContext(_ text: String) {
+        guard text != contextText else { return }
+        setLiveCaptureEnabled(false)
+        invalidate()
+        context = ConversationContext.snapshot(text, id: context?.conversationId ?? UUID().uuidString, source: "manual")
     }
 
     func setDemoMode(_ enabled: Bool) {
@@ -153,6 +167,7 @@ final class AppModel {
 
     func receive(_ snapshot: PromptSnapshot?) {
         guard let snapshot else {
+            if context != nil { context = nil; invalidate() }
             if activeSnapshot != nil {
                 endAutomaticSession()
                 prompt = ""
@@ -173,8 +188,9 @@ final class AppModel {
         prompt = snapshot.text
         source = PromptSource(processID: snapshot.processID, bundleIdentifier: snapshot.bundleIdentifier, name: snapshot.appName)
         lastFieldID = snapshot.fieldID
+        context = snapshot.context
         guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        analyze(after: .milliseconds(900))
+        analyze(after: .milliseconds(300))
     }
 
     func markRead() {
@@ -220,6 +236,7 @@ final class AppModel {
         let current = revision
         let useDemo = demoMode
         let app = sourceApp
+        let context = context
         let analyzePrompt = analyzePrompt
         isLoading = true
         presentationChanged()
@@ -229,7 +246,7 @@ final class AppModel {
                 try Task.checkCancellation()
                 let response: AnalyzeResponse
                 if useDemo { response = try .demo() }
-                else { response = try await analyzePrompt(text, app) }
+                else { response = try await analyzePrompt(text, app, context) }
                 guard !Task.isCancelled, let self, self.revision == current else { return }
                 self.result = response
                 self.selected = Set(response.skills.map(\.id))

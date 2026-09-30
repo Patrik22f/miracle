@@ -1,8 +1,10 @@
+> Default mode is now `knowledge`: local content index, 12 criteria, threshold 70, `meta.source = library`, `meta.ranking = knowledge-v1`, no outbound prompt analysis calls. Older modes described below remain available explicitly. Optional `skills[].knowledge` carries compiler version, content hash, evidence line numbers and reference counts. The response remains schema version 1.0 with additive fields. See [matching](SKILL_MATCHING.md) and [Claude Code](CLAUDE_CODE.md).
+
 # API v1
 
 Base URL: `http://127.0.0.1:8787`. `GET /health` returns `{"status":"ok","schemaVersion":"1.0"}`.
 
-`POST /analyze` requires `Content-Type: application/json` and the [request schema](../contracts/analyze-request.schema.json). Unknown fields are rejected. `app` is context for future host-specific behavior; it does not affect ranking yet. `maxSkills` defaults to 3.
+`POST /analyze` requires `Content-Type: application/json` and the [request schema](../contracts/analyze-request.schema.json). Unknown fields are rejected. `app` controls known Claude/Codex skill compatibility in knowledge mode. Optional `context` carries bounded active-chat history; `analysis.context` reports whether it was used. See [the context contract](CHAT_CONTEXT.md). `maxSkills` defaults to 3.
 
 Successful responses follow the [response schema](../contracts/analyze-response.schema.json). `skills` may be empty. `confidence` is a heuristic relevance score, not a calibrated probability. `model.profile` is one of `fast`, `balanced`, `capable`; it is not a provider model ID. `effort.level` is `low`, `medium`, or `high`.
 

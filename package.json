@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "node --watch api/src/server.js",
     "start": "node api/src/server.js",
@@ -14,6 +16,8 @@
     "macos:build": "bash scripts/build-macos.sh",
     "macos:test": "swift test --package-path macos --build-system native",
     "check": "npm test && npm run macos:test",
-    "smoke": "node scripts/smoke.js"
+    "smoke": "node scripts/smoke.js",
+    "claude:config": "node scripts/claude-config.js",
+    "eval:knowledge": "node scripts/evaluate-knowledge.js"
   }
 }

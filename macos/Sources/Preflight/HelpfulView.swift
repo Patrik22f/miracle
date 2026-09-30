@@ -3,12 +3,26 @@ import SwiftUI
 extension AnalyzeResponse {
     var sourceLabel: String {
         switch meta.source {
+        case "library": "Studied skill library"
         case "hybrid": "Imported + public search"
         case "installed": "Installed skills"
         case "skills.sh": "Live search"
         case "catalog": "Local catalog"
         default: "No search needed"
         }
+    }
+
+    var contextLabel: String {
+        switch analysis.context?.status {
+        case "used": analysis.context?.truncated == true ? "Using partial chat context" : "Using chat context"
+        case "missing": "Chat context needed · Review prompt to add it"
+        case "not-needed": "Using the latest request"
+        default: "Chat context unavailable"
+        }
+    }
+
+    var emptySkillsLabel: String {
+        analysis.context?.status == "missing" ? "Add the earlier task to find relevant skills." : "No sufficiently supported skill match in this library."
     }
 }
 
@@ -31,8 +45,9 @@ struct HelpfulView: View {
             if let result = model.result {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
+                        Text(result.contextLabel).font(.caption).foregroundStyle(.secondary)
                         if result.skills.isEmpty {
-                            Label("Your prompt can stand on its own.", systemImage: "checkmark.circle").font(.callout)
+                            Label(result.emptySkillsLabel, systemImage: "info.circle").font(.callout)
                         }
                         ForEach(result.skills) { skill in
                             VStack(alignment: .leading, spacing: 4) {

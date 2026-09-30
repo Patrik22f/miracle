@@ -6,7 +6,7 @@ import Testing
 struct IntegrationTests {
     @Test("Recognized live prompts drive recommendations and moving the field preserves selection")
     func recognizedPrompt() async throws {
-        let model = AppModel { _, _ in try .demo() }
+        let model = AppModel { _, _, _ in try .demo() }
         var captured = CapturedPrompt.cursorFixture()
         model.receiveCapture(.captured(captured))
         await model.task?.value
@@ -28,7 +28,7 @@ struct IntegrationTests {
 
     @Test("Disabling automatic advice keeps live capture; re-enabling analyzes the current prompt")
     func automaticToggle() async {
-        let model = AppModel { _, _ in try .demo() }
+        let model = AppModel { _, _, _ in try .demo() }
         model.setAutomaticRecommendationsEnabled(false)
         let captured = CapturedPrompt.cursorFixture()
         model.receiveCapture(.captured(captured))
@@ -47,7 +47,7 @@ struct IntegrationTests {
           arguments: [CaptureStatus.permissionRequired, .secureField("Cursor"), .unsupported("Cursor"),
                       .unreadable("Cursor"), .tooLong("Cursor"), .suspended, .waiting])
     func unavailableAutomaticPrompt(status: CaptureStatus) async {
-        let model = AppModel { _, _ in try .demo() }
+        let model = AppModel { _, _, _ in try .demo() }
         model.receiveCapture(.captured(.cursorFixture()))
         let pending = model.task
 
@@ -65,7 +65,7 @@ struct IntegrationTests {
           arguments: ["live", "automatic", "demo", "setup"])
     func lateAutomaticResponse(action: String) async throws {
         let deferred = DeferredValue<AnalyzeResponse>()
-        let model = AppModel { _, _ in await deferred.request() }
+        let model = AppModel { _, _, _ in await deferred.request() }
         let captured = CapturedPrompt.cursorFixture()
         model.receiveCapture(.captured(captured))
         let pending = model.task
@@ -95,7 +95,7 @@ struct IntegrationTests {
         let environment = CaptureEnvironmentStub()
         environment.source = captured.source
         let monitor = LivePromptMonitor(reader: reader, environment: environment.environment)
-        let model = AppModel(monitor: monitor) { _, _ in try .demo() }
+        let model = AppModel(monitor: monitor) { _, _, _ in try .demo() }
         model.setLiveCaptureEnabled(false)
 
         await model.capture()

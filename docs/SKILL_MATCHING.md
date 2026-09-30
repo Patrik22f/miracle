@@ -1,56 +1,36 @@
-# Skill import and prompt matching
+# Content-aware skill matching
 
-Preflight imports installed `SKILL.md` files and a public starter collection. Default `hybrid` mode evaluates that library and searches skills.sh using controlled topic labels. The **Skill library** sheet lets you search imports, inspect their scopes and purposes, open the original instructions, and refresh the import.
+Default `knowledge` mode recommends from an imported, versioned local library. No search or LLM request runs on the prompt path. Unknown skills with metadata alone are ineligible. See [the Czech architecture proposal and 12 criteria](SKILL_INTELLIGENCE_PROPOSAL.cs.md) and [Claude Code setup](CLAUDE_CODE.md).
 
-## Import
-
-```sh
-npm run skills:import
-npm start
-```
-
-The default local root is `~/.codex/skills`, including `.system`. Ten public sources are declared in `api/src/skill-library.js`: Vercel React performance and web guidelines, Superpowers debugging and TDD, Supabase Postgres guidance, and Anthropic frontend design, PDF, Word, spreadsheets, and presentations. This is a starter collection, not a mirror of skills.sh. Other public results are discovered on demand; their instruction bodies are not downloaded.
-
-Add active plugin folders or another collection explicitly:
+## Import and study
 
 ```sh
-npm run skills:import -- --root "$HOME/.codex/skills" --root /absolute/path/to/plugin/skills
+npm run skills:import                    # local roots + bounded public starter sources
+npm run skills:import -- --local-only    # local roots only
+npm run skills:import -- --api           # official Skills API details; Vercel OIDC required
+npm run skills:import -- --discover      # curated discovery from allowed sources, max 30
 ```
 
-Repeated `--root` arguments replace the default root. **Refresh imports** reuses the saved roots. `--local-only` omits public downloads; `SKILLS_MODE=installed npm start` also disables public discovery during analysis.
+Local roots default to `~/.codex/skills` and `~/.claude/skills`; repeated `--root` replaces them. Refresh reuses saved roots and provider. Import never follows nested symlinks, executes a skill or installs dependencies. Local SKILL.md files are capped at 256 KiB, traversal at eight levels and 2,000 files. The public starter provider uses ten explicitly configured GitHub URLs. With a Vercel OIDC token, the default public provider is the official skills.sh v1 API. Explicit `--api` never silently falls back to unauthenticated search.
 
-The machine-local `.preflight/skills.json` stores names, descriptions, bounded `SKILL.md` bodies, original locations, SHA-256 digests, and import times. It is excluded from Git and created with owner-only permissions. Bodies never execute and never enter HTTP responses. Local links point to the original file so sibling references remain available. Public links point to the original GitHub file. Supporting files are not copied; import does not install dependencies or grant tool access.
+The official provider fetches stable IDs and complete file trees from documented endpoints, validates identities and relative paths, limits each response to 2 MiB/256 files, rejects redirects and uses four workers. An injected token provider is called per request; CLI usage reads `VERCEL_OIDC_TOKEN`. A deployment should supply a rotating token provider. Credentials never enter snapshots or warnings. Failures retain prior versions with warnings. Discovery is source-allowlisted and happens during import, never from private prompt terms. Well-known/domain sources are not yet supported by this adapter.
 
-Limits: 256 KiB per file, 2,000 local files, eight directory levels, and six seconds per configured public fetch. Nested symlinks are skipped. Invalid metadata produces warnings. Identical copies collapse; conflicting definitions stay inspectable. Public failures retain previous snapshots with warnings; removed local files disappear on refresh. HTTP clients cannot supply roots or URLs.
+Each imported record has content, SHA-256, provenance, import time, optional API file bundle and a serializable `study` profile. The compiler extracts operations, scopes, purposes, instruction lines, simple exclusions, recognized agent extensions and referenced paths. It does not execute instructions or allow them to change weights. Reused studies must match compiler version and content hash. Older libraries compile once when loaded.
 
-## Eligibility before scoring
+This deterministic compiler is not general semantic understanding. Scope/purpose rules and selected workflow prerequisites remain curated. Supporting API files are stored and checked for references, but are not yet semantically studied. Locally linked dependencies and installed CLI/MCP availability are not verified. All results remain `not-audited`.
 
-1. Honor “no skills,” explicit skill exclusions, and simple negated clauses such as “not React.”
-2. Require compatible framework, platform, service, or artifact. Browser React and React Native are distinct. SwiftUI implies Swift and Apple; it does not imply UIKit. Named services must match.
-3. Require the relevant specialty. A framework mention cannot justify authentication, performance, or testing advice by itself. Broad skills are withheld on specialist tasks; artifact skills can still create/edit their own file type.
-4. Check reviewed workflow prerequisites. Live Excel needs an open/active Excel workflow. Stripe Connect needs a marketplace, connected account, or payment-distribution context.
-5. Require scope evidence. Unknown live names without recognizable scope are withheld. Reviewed general debugging/testing skills can cross platforms but need a technical task.
+## Runtime
 
-Explicit invocation (`$skill-name`, a distinctive `skill-name`, or “pdf skill”) takes priority and receives 100 for explicit request. Exclusion still wins. “PDF” alone is an artifact, not a skill invocation. Recommendation does not authorize a skill's commands.
+A cached snapshot and inverted indexes retrieve candidates by scope, purpose or exact name. Separate term postings retrieve evidence lines without repeatedly parsing whole bodies. HTTP requests share a single in-flight snapshot load. Atomic file replacement invalidates the cache on the next check (at most one second). Invalid replacements retain the last valid snapshot with a warning. Changing a source SKILL.md requires reimport; only the imported snapshot is scored.
 
-## Fit score
+The selector checks scope, purpose, provider prerequisites, prompt exclusions, content hash, simple body exclusions, agent compatibility, invocation flags and known missing API references. It requires body evidence for automatic selection. Then it scores 12 independent components totaling 100: purpose 18, framework/platform 15, operation 10, output artifact 7, description evidence 10, instruction evidence 12, workflow prerequisites 5, negative constraints 5, agent compatibility 5, availability 5, snapshot freshness 3, specialization 5.
 
-| Criterion | Maximum | Rule |
-| --- | ---: | --- |
-| Task purpose | 30 | 30 for matching specialty; 20 for eligible general/artifact work |
-| Platform or artifact | 25 | 25 specific match; 20 broader Swift/Apple/web/database scope; 15 eligible general-purpose skill |
-| Description evidence | 25 | Five per distinct shared nontrivial term, capped at 25 |
-| Specialist fit | 10 | 10 for one or two specialties; 5 for broader guidance |
-| Available instructions | 10 | 10 installed; 7 imported public; 0 discovery metadata only |
+The threshold is 70. Explicit requests come first, then precise platform fit, then score, installed availability and stable ID. Scope precedence prevents a broad Apple router displacing a SwiftUI specialist simply through more repeated terms. Popularity supplies no relevance. At most three distinct names are selected, and additional results must cover a new purpose/platform pair unless explicitly requested. No skill is a valid result.
 
-Recommend eligible skills scoring **60/100 or above**, up to three. Explicit requests come first; other ties prefer closer scope, then stable ID order. Equivalent installed guidance has an availability advantage; stronger task evidence can still favor a public skill. Popularity does not influence `criteria-v2`.
+Responses expose the 12 component scores and optional `knowledge` with compiler version, hash, evidence line numbers and reference counts. They do not expose full bodies. `confidence` is score/100 for wire compatibility, not a calibrated probability. Simple CZ vocabulary is supported; complex negation and unrestricted natural language remain limitations.
 
-Selection deduplicates names and includes additional skills only for a new purpose/platform combination. Three overlapping accessibility skills should not fill the list. A prompt addressing SwiftUI and React accessibility may receive one for each. A specialist addressing a bug also covers generic debugging. Explicit requests may select overlapping skills within the three-skill limit.
+## Evaluation
 
-Expand **Why this skill** to see the total, threshold, and component scores. The response also explains the match and identifies the source. `confidence` is score/100 for compatibility, not a calibrated probability or security rating.
+`npm test` covers API identity/size/path validation, outages, cache replacement, protocol behavior, compatibility, explicit invocation and ranking regressions. `npm run eval:knowledge` runs 28 handwritten scenarios and 500 warm selections, separating cold compilation from warm p50/p95/p99. Measurements exclude HTTP, model inference and hook process startup. The scenarios are regression fixtures, not production accuracy estimates. The proposal defines a separate human-labeled evaluation and target metrics before any enterprise accuracy claim.
 
-## Evaluation and limitations
-
-`npm run eval` runs ten legacy public-search cases and twenty criteria cases covering concurrency, accessibility, native/browser React, persistence testing, release, artifacts, negation, invocation, abstention, and complementary skills. `npm test` also checks prerequisites, import validation, failures, and private instruction bodies. `npm run macos:test` verifies decoding and copy behavior. These are regression fixtures, not an accuracy benchmark.
-
-Matching uses names, descriptions, a controlled vocabulary, and reviewed annotations. Full instruction bodies are stored for provenance, not used as executable policy or semantic matching evidence. Complex negation, unfamiliar technologies, other languages, and subtle context can still produce misses. Destination-app tool availability is unverified. Every skill remains `not-audited`; inspect the explanation and selection before copying.
+Legacy `hybrid`/`installed` modes preserve `criteria-v2` and its 60-point threshold. `hybrid` still does live public discovery; use `knowledge` for the new content-only recommendation guarantee. `live`/`offline` retain the old `heuristic-v1` path for compatibility and demonstrations.

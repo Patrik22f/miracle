@@ -33,6 +33,18 @@ struct OverlayView: View {
                 .padding(6).background(.background, in: RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator))
                 .accessibilityLabel("Prompt to analyze")
+            DisclosureGroup(model.contextLabel) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Review the earlier task and decisions. Add anything missing from the visible chat.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    TextEditor(text: Binding(get: { model.contextText }, set: model.editContext))
+                        .font(.body).frame(height: 90)
+                        .accessibilityLabel("Chat context")
+                    if model.context != nil {
+                        Button("Clear context") { model.editContext("") }.controlSize(.small)
+                    }
+                }
+            }.font(.caption)
             HStack {
                 Button("Analyze prompt") { model.analyze() }
                     .buttonStyle(.borderedProminent).disabled(model.isLoading || model.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -57,8 +69,9 @@ struct OverlayView: View {
                             Text("\(count) imported skills evaluated · Up to 3 complementary suggestions")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
+                        Text(result.contextLabel).font(.caption).foregroundStyle(.secondary)
                         if result.skills.isEmpty {
-                            Text("No matching skill found. Your prompt can stand on its own.").foregroundStyle(.secondary)
+                            Text(result.emptySkillsLabel).foregroundStyle(.secondary)
                         }
                         ForEach(result.skills) { skill in
                             VStack(alignment: .leading, spacing: 6) {
@@ -87,7 +100,7 @@ struct OverlayView: View {
                         Text(result.model.reason).font(.caption).foregroundStyle(.secondary)
                         ForEach(result.meta.warnings, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
                     } else if !model.isLoading {
-                        ContentUnavailableView("Ready when you are", systemImage: "text.magnifyingglass", description: Text("With Live capture on, text from other apps appears above. Cursor prompts get automatic recommendations when enabled. You can also choose Analyze prompt or use ⌥⌘Return."))
+                        ContentUnavailableView("Ready when you are", systemImage: "text.magnifyingglass", description: Text("With Live capture on, text from other apps appears above. Recognized Cursor and Codex prompts get automatic recommendations when enabled. You can also choose Analyze prompt or use ⌥⌘Return."))
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -99,7 +112,7 @@ struct OverlayView: View {
                 Button("Copy with skills") { model.copy(includeSkills: true) }
                     .buttonStyle(.borderedProminent).disabled(model.result == nil || model.selected.isEmpty)
             }
-            Text("Imported skills stay on your Mac. Public search sends topic labels to skills.sh.")
+            Text("Prompt and chat context stay on your Mac. Skills are selected from the local library.")
                 .font(.caption2).foregroundStyle(.secondary)
         }
         .padding(22)

@@ -50,6 +50,40 @@
             "type": "string"
           },
           "maxItems": 3
+        },
+        "context": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "turnCount",
+            "truncated"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "used",
+                "missing",
+                "not-needed",
+                "unavailable"
+              ]
+            },
+            "source": {
+              "enum": [
+                "manual",
+                "accessibility",
+                "claude-transcript"
+              ]
+            },
+            "turnCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 16
+            },
+            "truncated": {
+              "type": "boolean"
+            }
+          }
         }
       }
     },
@@ -179,11 +213,14 @@
                 "maximum": 100
               },
               "threshold": {
-                "const": 60
+                "enum": [
+                  60,
+                  70
+                ]
               },
               "criteria": {
                 "type": "array",
-                "maxItems": 5,
+                "maxItems": 12,
                 "items": {
                   "type": "object",
                   "additionalProperties": false,
@@ -214,6 +251,46 @@
                 }
               }
             }
+          },
+          "knowledge": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "version",
+              "hash",
+              "method",
+              "evidenceLines",
+              "referenceCount",
+              "missingReferenceCount"
+            ],
+            "properties": {
+              "version": {
+                "const": "knowledge-v1"
+              },
+              "hash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "method": {
+                "const": "deterministic-content-profile"
+              },
+              "evidenceLines": {
+                "type": "array",
+                "maxItems": 3,
+                "items": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "referenceCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "missingReferenceCount": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
           }
         }
       },
@@ -236,14 +313,16 @@
             "catalog",
             "none",
             "installed",
-            "hybrid"
+            "hybrid",
+            "library"
           ]
         },
         "ranking": {
           "type": "string",
           "enum": [
             "heuristic-v1",
-            "criteria-v2"
+            "criteria-v2",
+            "knowledge-v1"
           ]
         },
         "durationMs": {

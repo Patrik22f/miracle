@@ -3,6 +3,8 @@ import { catalog } from './catalog.js';
 import { signals, capabilities, domains, compatible, label } from './signals.js';
 import { promptCriteria, recommendSkills } from './criteria.js';
 import { readLibrary } from './skill-library.js';
+import { recommendKnowledge } from './skill-knowledge.js';
+import { resolveTask } from './task-context.js';
 
 export function classify(prompt) {
   const tags = signals(prompt, { task: true });
@@ -90,7 +92,22 @@ export function rank(candidates, analysis, maxSkills = 3) {
 
 export async function analyze(request, options = {}) {
   const start = performance.now();
-  const analysis = classify(request.prompt);
+  const plan = resolveTask(request.prompt, request.context);
+  const analysis = classify(plan.effectivePrompt);
+  analysis.effort = plan.effort.level;
+  if (options.mode === 'knowledge') {
+    const library = options.library ?? await readLibrary();
+    const skills = recommendKnowledge(library, request.prompt, { maxSkills: request.maxSkills ?? 3, app: request.app, resolved: plan });
+    return {
+      schemaVersion: '1.0', requestId: randomUUID(),
+      analysis: { intent: analysis.intent, tags: [...new Set([...plan.task.scopes, ...plan.task.purposes])], queries: [], context: plan.context },
+      effort: plan.effort,
+      model: { profile: analysis.effort === 'high' ? 'capable' : analysis.effort === 'low' ? 'fast' : 'balanced', reason: 'Choose an available model in your AI app.' },
+      skills,
+      meta: { source: 'library', ranking: 'knowledge-v1', importedCount: library.skills.length,
+        durationMs: Math.round(performance.now() - start), warnings: library.warnings ?? [] },
+    };
+  }
   if (['hybrid', 'installed'].includes(options.mode)) {
     const library = options.library ?? await readLibrary();
     const task = promptCriteria(request.prompt);

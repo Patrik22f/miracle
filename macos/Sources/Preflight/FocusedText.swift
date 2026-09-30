@@ -12,7 +12,7 @@ enum AccessibilityPermission {
 }
 
 /// All synchronous cross-process AX reads stay off the UI actor. No key taps,
-/// clipboard access, window crawling, or prompt persistence are used.
+/// clipboard access, whole-window crawling, or prompt persistence are used.
 actor FocusedTextReader: FocusedTextReading {
     private var preparedSource: PromptSource?
     private var previousElement: AXUIElement?
@@ -79,11 +79,58 @@ actor FocusedTextReader: FocusedTextReading {
         let automatic = PromptPolicy.accepts(bundleID: source.bundleIdentifier ?? "", role: role,
                                              subrole: subrole ?? "", label: label)
         let bounds = fieldBounds(focused)
+        let context = automatic ? conversationContext(around: focused, source: source) : nil
         guard let current = elementAttribute(app, kAXFocusedUIElementAttribute), CFEqual(focused, current) else {
             return .status(.waiting)
         }
         return .captured(CapturedPrompt(text: captured.text, source: source, fieldID: fieldID,
-                                        bounds: bounds, supportsAutomaticRecommendations: automatic))
+                                        bounds: bounds, supportsAutomaticRecommendations: automatic, context: context))
+    }
+
+    private func conversationContext(around focused: AXUIElement, source: PromptSource) -> ConversationContext? {
+        // Only inspect a labeled chat ancestor of a recognized composer. Never
+        // fall back to the application/window or remember another chat's text.
+        let deadline = ContinuousClock.now.advanced(by: .milliseconds(150))
+        var ancestor = elementAttribute(focused, kAXParentAttribute)
+        for _ in 0..<7 {
+            guard let element = ancestor, !Task.isCancelled, ContinuousClock.now < deadline else { return nil }
+            AXUIElementSetMessagingTimeout(element, 0.01)
+            let role = attribute(element, kAXRoleAttribute) as? String ?? ""
+            if role == kAXWindowRole || role == kAXApplicationRole { return nil }
+            let label = contextLabel(element)
+            if ChatContextPolicy.isConversation(role: role, label: label) {
+                var pending: [(AXUIElement, Int)] = [(element, 0)]
+                var visited = 0, fragments: [String] = [], size = 0
+                while let (node, depth) = pending.popLast(), visited < 240, ContinuousClock.now < deadline, !Task.isCancelled {
+                    visited += 1
+                    AXUIElementSetMessagingTimeout(node, 0.01)
+                    let nodeRole = attribute(node, kAXRoleAttribute) as? String ?? ""
+                    if CFEqual(node, focused) || attribute(node, "AXHidden") as? Bool == true
+                        || ChatContextPolicy.excludes(role: nodeRole, label: contextLabel(node)) { continue }
+                    if nodeRole == kAXStaticTextRole {
+                        let value = attribute(node, kAXValueAttribute) as? String ?? attribute(node, kAXTitleAttribute) as? String ?? ""
+                        if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            // Bound intermediate memory too, while keeping recent text.
+                            let fragment = String(value.suffix(24_000))
+                            fragments.insert(fragment, at: 0); size += fragment.utf16.count
+                            while size > 32_000, fragments.count > 1 { size -= fragments.removeFirst().utf16.count }
+                        }
+                    } else if depth < 10, let children = attribute(node, kAXChildrenAttribute) as? [AXUIElement] {
+                        // Visit recent messages first, then restore display order.
+                        pending.append(contentsOf: children.suffix(240).map { ($0, depth + 1) })
+                    }
+                }
+                return ConversationContext.snapshot(fragments.joined(separator: "\n\n"),
+                    id: "ax-\(source.processID)-\(fieldID)", source: "accessibility", partial: true)
+            }
+            ancestor = elementAttribute(element, kAXParentAttribute)
+        }
+        return nil
+    }
+
+    private func contextLabel(_ element: AXUIElement) -> String {
+        [kAXTitleAttribute, kAXDescriptionAttribute, kAXIdentifierAttribute]
+            .compactMap { attribute(element, $0) as? String }.joined(separator: " ")
     }
 
     private func fieldBounds(_ element: AXUIElement) -> CGRect? {

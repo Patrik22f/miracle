@@ -3,10 +3,12 @@ import { readdir, readFile, stat, mkdir, writeFile, rename, realpath } from 'nod
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { skillCriteria, criteria } from './criteria.js';
+import { skillCriteria } from './criteria.js';
+import { createSkillsAPI, syncSkillsAPI } from './skills-api.js';
+import { compileSkill, knowledgeCriteria, prepareKnowledge } from './skill-knowledge.js';
 
 export const libraryPath = fileURLToPath(new URL('../../.preflight/skills.json', import.meta.url));
-export const defaultRoots = [join(homedir(), '.codex', 'skills')];
+export const defaultRoots = [join(homedir(), '.codex', 'skills'), join(homedir(), '.claude', 'skills')];
 const maxBytes = 256 * 1024;
 
 // A reviewed public starter library. Only these URLs are fetched during import.
@@ -60,7 +62,8 @@ async function boundedResponse(response) {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-export async function importSkills({ roots = defaultRoots, includePublic = true, fetchImpl = fetch, previous = null } = {}) {
+export async function importSkills({ roots = defaultRoots, includePublic = true, fetchImpl = fetch, previous = null,
+  publicProvider = process.env.VERCEL_OIDC_TOKEN ? 'skills-api' : 'starter', discover = false, api } = {}) {
   const skills = [], warnings = [], seen = new Set();
   let scanned = 0, duplicates = 0;
   async function walk(directory, depth = 0) {
@@ -88,7 +91,10 @@ export async function importSkills({ roots = defaultRoots, includePublic = true,
   for (const root of resolvedRoots) {
     try { await walk(root); } catch (error) { warnings.push(`Cannot import ${root}: ${error.code ?? 'unreadable'}.`); }
   }
-  if (includePublic) {
+  if (includePublic && publicProvider === 'skills-api') {
+    const result = await syncSkillsAPI({ api: api ?? createSkillsAPI({ fetchImpl }), discover, previous, makeRecord: record });
+    skills.push(...result.skills); warnings.push(...result.warnings);
+  } else if (includePublic) {
     const results = await Promise.allSettled(publicSources.map(async source => {
       const response = await fetchImpl(source.url, { signal: AbortSignal.timeout(6000), redirect: 'error' });
       const content = await boundedResponse(response);
@@ -110,8 +116,9 @@ export async function importSkills({ roots = defaultRoots, includePublic = true,
     const key = `${skill.provenance}:${skill.name}:${skill.hash}`;
     if (deduped.has(key)) duplicates++; else deduped.set(key, skill);
   }
-  return { version: 1, importedAt: new Date().toISOString(), roots: resolvedRoots, includePublic, scanned, duplicates,
-    skills: [...deduped.values()].sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)), warnings };
+  return { version: 1, importedAt: new Date().toISOString(), roots: resolvedRoots, includePublic, publicProvider, discover, scanned, duplicates,
+    skills: [...deduped.values()].map(skill => ({ ...skill, study: compileSkill(skill) }))
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)), warnings };
 }
 const unique = xs => [...new Set(xs)];
 
@@ -138,11 +145,38 @@ export function librarySummary(library) {
     importedAt: library.importedAt ?? null, count: library.skills.length,
     installedCount: library.skills.filter(s => s.provenance === 'installed').length,
     publicCount: library.skills.filter(s => s.provenance === 'public-import').length,
-    warnings: library.warnings, criteria,
+    warnings: library.warnings, criteria: knowledgeCriteria,
     skills: library.skills.map(skill => ({
       id: skill.id, name: skill.name, description: skill.description, source: skill.source,
       provenance: skill.provenance, url: skill.url,
       scopes: skillCriteria(skill).scopes, purposes: skillCriteria(skill).purposes,
     })),
+  };
+}
+
+// One disk snapshot shared by simultaneous requests. Atomic importer replacement
+// invalidates it on the next check; a failed refresh preserves the last good state.
+export function createLibraryStore(path = libraryPath, { interval = 1000 } = {}) {
+  let snapshot, signature, checked = -Infinity, pending;
+  return async function current() {
+    if (snapshot && performance.now() - checked < interval) return snapshot;
+    if (pending) return pending;
+    pending = (async () => {
+      try {
+        const info = await stat(path).catch(error => { if (error.code === 'ENOENT') return null; throw error; });
+        const next = info ? `${info.ino}:${info.size}:${info.mtimeMs}:${info.ctimeMs}` : 'absent';
+        if (!snapshot || signature !== next) {
+          const library = await readLibrary(path);
+          prepareKnowledge(library);
+          snapshot = library; signature = next;
+        }
+      } catch (error) {
+        if (!snapshot) throw error;
+        snapshot = { ...snapshot, warnings: [...new Set([...snapshot.warnings, 'Library refresh failed; using the last valid snapshot.'])] };
+      }
+      checked = performance.now();
+      return snapshot;
+    })().finally(() => { pending = null; });
+    return pending;
   };
 }

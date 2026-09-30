@@ -2,7 +2,7 @@
 
 **The right Agent Skills, before you send.**
 
-A native macOS prompt companion: type in a supported app and see the focused field appear automatically in **Your prompt**. Choose **Analyze prompt** to review installed and public skill recommendations. Skills are the product; model and effort are secondary advice.
+A native macOS prompt companion: type in a supported app and see the focused field appear automatically in **Your prompt**. Choose **Analyze prompt** to review recommendations from studied local and public skill snapshots. Claude Code can also receive recommendations through its submit hook. Skills are the product; model and effort are secondary advice.
 
 ## Start in two minutes
 
@@ -29,7 +29,7 @@ With **Recommend automatically as I write** enabled, recognized Cursor prompts a
 
 **⌥⌘Return** still captures and analyzes a one-time snapshot, preferring selected text. It pauses live capture to preserve your selected excerpt. If a host does not expose an editable Accessibility field, copy and paste into Preflight instead. See [capture architecture and the host verification checklist](docs/LIVE_CAPTURE.md).
 
-Open **Skill library** to browse or refresh imported installed and public skills. Expand **Why this skill** to inspect the fit score. Matching checks purpose, platform/artifact, prerequisites, description evidence, and available instructions. It returns up to three complementary skills scoring at least 60/100. See [the import and matching criteria](docs/SKILL_MATCHING.md).
+Open **Skill library** to browse or refresh imported installed and public skills. Expand **Why this skill** to inspect the fit score. Matching checks purpose, platform/artifact, prerequisites, description evidence, and available instructions. The default content index returns up to three complementary skills scoring at least 70/100 across 12 criteria, with source hashes and instruction line evidence. See [the import and matching criteria](docs/SKILL_MATCHING.md).
 
 Review the skills, select the ones you want, and click **Copy with skills**. Paste back into your AI app, review, and send. Closing the overlay leaves the original input untouched.
 
@@ -47,7 +47,9 @@ Or choose **Try demo** from the menu bar. Demo mode always shows the clearly lab
 - Automatic capture of supported focused editable text inputs, app provenance, persistent pause/resume, secure/read-only field exclusion, and paste fallback.
 - Background AX reads, bounded timeouts, serial sampling, permission recovery, stale-read rejection, and automatic pause for manual editing and demo mode.
 - `POST /analyze` with request validation, bounded input, timeouts, errors, and stable JSON shapes.
-- Public skills.sh search, normalization, deduplication, relevance ranking, up to three results, and a valid “no skill needed” result.
+- Content-aware local selection with 12 criteria, versioned profiles, instruction evidence, no prompt-path network, up to three results, and valid abstention.
+- Official skills.sh v1 content import with OIDC, bounded allowlisted discovery, four workers, response validation and retained snapshots on failure.
+- Claude Code submit hook, manual-invocation controls and local Claude skill imports.
 - Installed and public `SKILL.md` imports, a searchable library, explicit provenance, and refresh warnings.
 - Explainable prompt criteria, prerequisite checks, abstention, and complementary selection.
 - Model capability profile and effort advice; deterministic heuristics keep the demo fast and key-free.
@@ -97,24 +99,29 @@ Request fields: `prompt` (required, 1–12,000 characters), `app` (optional labe
 npm test                  # offline backend + HTTP + contract checks
 npm run skills:import     # installed skills + ten public starter skills
 npm run eval              # thirty-prompt relevance report, no network
-npm run eval:live         # three public-search checks, requires internet
+npm run eval:live         # three legacy public-search checks, requires internet
+npm run eval:knowledge    # content-index regression cases and local latency report
+npm run --silent claude:config # print a Claude Code hook configuration fragment
 npm run macos:test        # build client + decode shared contract in Swift
 npm run smoke             # live check against a running API
 ```
 
 ## Public discovery and scope
 
-The adapter uses `https://skills.sh/api/search?q=…&limit=8`, the public endpoint used by the [skills CLI](https://github.com/vercel-labs/skills/blob/main/src/find.ts). Verified on September 30, 2026. The `/api/v1/skills/search` endpoint returned HTTP 401 in our check. Public search is an external dependency and can change; its adapter is isolated in `api/src/analyze.js`.
+For the requested enterprise direction, see the [concrete proposal with 12 criteria, alternatives and acceptance targets](docs/SKILL_INTELLIGENCE_PROPOSAL.cs.md). The implementation is a foundation, not a claim of enterprise certification or measured production accuracy.
 
-Default `hybrid` mode combines imported skills and live discovery using explainable local ranking (`criteria-v2`). Purpose and compatible platform are eligibility requirements. Imported descriptions, reviewed annotations, and workflow prerequisites supply evidence. `SKILLS_MODE=installed` uses only installed imports without network access during analysis. Older `live` and `offline` modes retain `heuristic-v1`. See [matching criteria](docs/SKILL_MATCHING.md) and [the relevance evaluation](docs/RELEVANCE.md).
 
-The importer fetches ten configured public `SKILL.md` sources; arbitrary live results remain metadata-only. The backend does not use an LLM reranker or perform security audits. All results say `not-audited`. Install counts are returned only when supplied by live search.
+The legacy discovery adapter uses `https://skills.sh/api/search?q=…&limit=8`, the public endpoint used by the [skills CLI](https://github.com/vercel-labs/skills/blob/main/src/find.ts). Verified on September 30, 2026. The `/api/v1/skills/search` endpoint returned HTTP 401 in our check. Public search is an external dependency and can change; its adapter is isolated in `api/src/analyze.js`.
+
+Default `knowledge` mode selects from the local content index with `knowledge-v1`, 12 criteria and a 70/100 threshold. It never searches the network during analysis. Compiler output is deterministic and evidence-linked; it is not a general semantic model. `hybrid` and `installed` preserve the older `criteria-v2` behavior; `live` and `offline` retain `heuristic-v1`. See [matching criteria](docs/SKILL_MATCHING.md), [the architecture proposal](docs/SKILL_INTELLIGENCE_PROPOSAL.cs.md) and [Claude Code setup](docs/CLAUDE_CODE.md).
+
+The importer supports ten configured public `SKILL.md` starter sources and the official Skills API (`npm run skills:import -- --api`, requiring `VERCEL_OIDC_TOKEN`). `--discover` imports up to 30 allowlisted curated results with complete file bundles. Default local roots include both Codex and Claude Code. Unstudied live search results are excluded from `knowledge` recommendations. The backend does not use an LLM reranker or perform security audits. All results say `not-audited`. Install counts are returned only when supplied by live search.
 
 This version follows the focused editable field through Accessibility and keeps a dedicated pre-send shortcut; it never intercepts another app's Enter key. It copies skill paths and links; it does **not** install skill dependencies, change the host model, or automatically send the prompt. AX support depends on the target app and focused control; rich web editors and terminal prompts may require paste. Cursor 3.22.12's Agents composer was verified on this Mac: successive unsent edits appeared automatically and clearing the composer cleared Preflight. The user also confirmed that an unsent prompt typed in Codex mirrors automatically. Other hosts require their own acceptance checks. “Any app” means an app exposing the supported Accessibility text semantics, not universal editor compatibility.
 
 ## Local data flow
 
-The API binds to `127.0.0.1` and rejects browser origins. Live capture reads the focused editable field in any accessible foreground app, not just AI apps. It skips Preflight itself, secure fields identified by Accessibility, and read-only controls. Captured text stays in memory. Analysis is explicit except for recognized Cursor prompts when automatic recommendations are enabled. Raw prompts go only from the native client to this local API during analysis. Only controlled topic labels (such as `react performance`) go to skills.sh. No prompt logging, telemetry, prompt persistence, or LLM provider calls. Imported skill snapshots persist only in the ignored local `.preflight/` directory. Clicking a skill link opens its local instructions or public source. Copy actions intentionally replace the clipboard. Do not expose this unauthenticated development API to a network.
+The API binds to `127.0.0.1` and rejects browser origins. Live capture reads the focused editable field in any accessible foreground app, not just AI apps. It skips Preflight itself, secure fields identified by Accessibility, and read-only controls. Captured text stays in memory. Analysis is explicit except for recognized Cursor prompts when automatic recommendations are enabled. Raw prompts go only from the native client to this local API during analysis. In default `knowledge` mode nothing leaves the device during analysis. Legacy live-discovery modes send only controlled topic labels (such as `react performance`) to skills.sh. No prompt logging, telemetry, prompt persistence, or LLM provider calls. Imported skill snapshots persist only in the ignored local `.preflight/` directory. Clicking a skill link opens its local instructions or public source. Copy actions intentionally replace the clipboard. Do not expose this unauthenticated development API to a network.
 
 Quit Preflight before rebuilding; the build script refuses to overwrite a running app. It automatically selects a single available Apple Development certificate and remembers that identity locally in `build/.signing-identity`. With multiple certificates, set `PREFLIGHT_CODESIGN_IDENTITY` to the desired name or SHA-1. Builds are signed in a temporary directory, then installed at `~/Applications/Preflight.app` and verified. The `build/Preflight.app` path is a symlink to that installation. Both signing and the runnable bundle stay outside iCloud storage, which can invalidate signatures by reattaching Finder metadata. Set `PREFLIGHT_APP_PATH` to another absolute, non-iCloud `.app` path if needed. This is development signing, not notarized distribution.
 
@@ -134,3 +141,7 @@ git push -u origin feature/macos-ui feature/backend-intelligence
 ```
 
 If `origin` already exists, only run `git push -u origin main feature/macos-ui feature/backend-intelligence`.
+
+## Chat-aware recommendations
+
+Short follow-ups now use supplied active-chat context for skills and effort. Claude Code uses its exact-session transcript; the macOS client attempts a bounded read of a labeled conversation around recognized Cursor/Codex composers and offers a reviewable context editor when history is missing. UI capture depends on host accessibility support and remains unverified against live host trees. See [context behavior, privacy and limitations](docs/CHAT_CONTEXT.md).

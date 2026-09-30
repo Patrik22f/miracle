@@ -10,6 +10,7 @@ const scopeRules = [
   ['web', /\bweb\b|\bfrontend\b|\bhtml\b|\bcss\b|\blanding page\b/i],
   ['supabase', /\bsupabase\b/i], ['postgres', /\bpostgres(?:ql)?\b/i],
   ['database', /\bdatabase\b|\bsql\b/i], ['python', /\bpython\b|\bpytest\b/i],
+  ['grdb', /\bgrdb\b/i], ['sqlite', /\bsqlite\b/i],
   ['stripe', /\bstripe\b/i], ['clerk', /\bclerk\b/i],
   ['pdf', /\bpdf\b/i], ['documents', /\bdocx\b|\bword document\b/i],
   ['spreadsheets', /\bxlsx\b|\bspreadsheet\w*\b|\bexcel\b/i],
@@ -120,6 +121,8 @@ const overrides = {
 };
 
 const prerequisites = {
+  'axiom-ai': /\b(?:apple intelligence|on device ai|foundation models|languagemodelsession|generable|coreml|speechtranscriber|speech to text)\b/i,
+  'axiom-tools': /\baxiom\b|\bxclog\b|\bsymbolicat\w*\b/i,
   'excel-live-control': /\b(?:open|active|live|connected)\b[\s\S]{0,40}\b(?:excel|workbook|session)\b|\bexcel\b[\s\S]{0,40}\b(?:add in|open|active|live|connected)\b|@excel/i,
   'connect-recommend': /\bstripe connect\b|\bconnected accounts?\b|\bmarketplace\b|\bsellers?\b|\bvendors?\b|\bsplit payments?\b|\brevenue sharing\b/i,
   'connect-required-verification-information': /\bstripe connect\b|\bconnected accounts?\b|\bkyc\b|\bsellers?\b|\bmerchants?\b/i,
@@ -142,8 +145,7 @@ export function skillCriteria(skill) {
   return { scopes, purposes, tokens: tokens(`${skill.name} ${description}`), annotated: false };
 }
 
-export function evaluateSkill(skill, task) {
-  const profile = skillCriteria(skill);
+export function evaluateSkill(skill, task, profile = skillCriteria(skill)) {
   const named = new RegExp(`(?:^|[^a-z0-9-])\\$?${escape(skill.name)}(?:$|[^a-z0-9-])`, 'i');
   // A common format name such as PDF is not itself an invocation of the pdf skill.
   const invocation = new RegExp(`\\$${escape(skill.name)}(?:$|[^a-z0-9-])|\\b${escape(skill.name)}\\s+skill\\b|\\bskill\\s+${escape(skill.name)}\\b`, 'i');
@@ -156,7 +158,7 @@ export function evaluateSkill(skill, task) {
   const matchedTokens = profile.tokens.filter(t => task.tokens.includes(t));
   if (!explicit) {
     const prerequisite = prerequisites[skill.name.toLowerCase()];
-    if (prerequisite && !prerequisite.test(normalize(task.positive))) return rejected('The required workflow is absent from the prompt.');
+    if (prerequisite && !prerequisite.test(normalize(task.workflowText ?? task.positive))) return rejected('The required workflow is absent from the prompt.');
     if (profile.scopes.length && !matchedScopes.length) return rejected('Platform or artifact does not match.');
     // Named providers must match even when another scope (e.g. React) does.
     if (profile.scopes.some(s => ['stripe', 'clerk', 'supabase'].includes(s) && !task.scopes.includes(s))) return rejected('Required service is absent.');

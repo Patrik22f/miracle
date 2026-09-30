@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { analyze, classify, discover, normalizeSkill } from '../src/analyze.js';
 import { createServer } from '../src/server.js';
 import { criterionCandidates } from '../eval/criteria.js';
+import { knowledgeLibrary } from '../eval/knowledge.js';
 
 const read = async name => JSON.parse(await readFile(new URL(`../../${name}`, import.meta.url)));
 const example = { prompt: 'Optimize this Next.js page. It is slow when rendering 500 products.', app: 'Cursor', maxSkills: 3 };
@@ -102,6 +103,9 @@ test('Shared request/response fixtures conform and the Swift demo is identical',
   assert.deepEqual(response, await read('macos/Sources/Preflight/Resources/demo-response.json'));
   const imported = await analyze({ prompt: 'Fix Swift actor isolation.' }, { mode: 'installed', library: { skills: criterionCandidates, warnings: [] } });
   matchesSchema(imported, await read('contracts/analyze-response.schema.json'));
+  const studied = await analyze({ prompt: 'Fix Swift Sendable actor isolation.', app: 'Claude Code' }, { mode: 'knowledge', library: knowledgeLibrary });
+  assert.equal(studied.skills[0].evaluation.criteria.length, 12);
+  matchesSchema(studied, await read('contracts/analyze-response.schema.json'));
 });
 
 test('HTTP API validates bodies and errors; rejects browser origins', async t => {
@@ -120,7 +124,7 @@ test('HTTP API validates bodies and errors; rejects browser origins', async t =>
     matchesSchema(await response.json(), await read('contracts/error.schema.json'));
   }
   assert.equal((await post(JSON.stringify({ prompt: 'a'.repeat(12001) }))).status, 400);
-  assert.equal((await post(JSON.stringify({ prompt: 'a'.repeat(70000) }))).status, 413);
+  assert.equal((await post(JSON.stringify({ prompt: 'a'.repeat(200000) }))).status, 413);
   assert.equal((await post(JSON.stringify(example), { Origin: 'https://evil.test' })).status, 403);
   assert.equal((await post(JSON.stringify(example), { 'Content-Type': 'text/plain' })).status, 415);
   assert.equal((await fetch(`${base}/missing`)).status, 404);
