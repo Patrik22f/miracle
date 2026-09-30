@@ -31,25 +31,19 @@ struct OverlayView: View {
                 }
             }
             Divider()
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Prompt").font(.subheadline.weight(.medium))
-                    Spacer()
-                    if model.isLoading {
-                        ProgressView().controlSize(.mini).accessibilityLabel("Analyzing prompt")
-                        Button("Cancel", action: model.cancel).controlSize(.small)
-                    } else if !model.prompt.isEmpty, model.targetApp != nil {
-                        Button { model.analyze() } label: { Image(systemName: "arrow.clockwise") }
-                            .buttonStyle(.borderless).accessibilityLabel("Analyze prompt again")
-                    }
-                }
+            HStack(spacing: 10) {
                 Text(promptPreview)
                     .font(.callout).foregroundStyle(.secondary)
-                    .lineLimit(2).truncationMode(.tail)
-                    .frame(maxWidth: .infinity, minHeight: 32, alignment: .topLeading)
-                    .padding(10)
-                    .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+                    .lineLimit(1).truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityLabel("Prompt preview: \(promptPreview)")
+                if model.isLoading {
+                    ProgressView().controlSize(.mini).accessibilityLabel("Analyzing prompt")
+                    Button("Cancel", action: model.cancel).controlSize(.small)
+                } else if !model.prompt.isEmpty, model.targetApp != nil {
+                    Button { model.analyze() } label: { Image(systemName: "arrow.clockwise") }
+                        .buttonStyle(.borderless).accessibilityLabel("Analyze prompt again")
+                }
             }
             if model.captureStatus == .permissionRequired {
                 Button("Enable Accessibility", action: AccessibilityPermission.request).controlSize(.small)
