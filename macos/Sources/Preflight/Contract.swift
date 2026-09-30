@@ -44,7 +44,12 @@ struct AnalyzeResponse: Codable, Sendable {
     }
 
     static func demo() throws -> Self {
-        guard let url = Bundle.module.url(forResource: "demo-response", withExtension: "json") else {
+        // A packaged app stores resources in Contents/Resources; native SwiftPM's
+        // generated accessor only searches beside the executable or in its build folder.
+        let packaged = Bundle.main.resourceURL?
+            .appendingPathComponent("Preflight_Preflight.bundle")
+        let resources = packaged.flatMap { Bundle(url: $0) } ?? Bundle.module
+        guard let url = resources.url(forResource: "demo-response", withExtension: "json") else {
             throw ClientError.message("The demo fixture is missing. Rebuild the app.")
         }
         return try JSONDecoder().decode(Self.self, from: Data(contentsOf: url))
