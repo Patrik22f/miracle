@@ -1,0 +1,33 @@
+:root { color-scheme: light; font: 14px -apple-system, BlinkMacSystemFont, sans-serif; color: #252b23; background: #eeeee6; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+button { cursor: pointer; font: inherit; }
+button:focus-visible { outline: 2px solid #2465b4; outline-offset: 3px; }
+.preview { max-width: 1200px; margin: auto; padding: 32px 38px; }
+.shop-nav { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 9px; border-bottom: 1px solid #d3d5cb; padding-bottom: 17px; }
+.shop-nav strong { font-size: 16px; letter-spacing: -.08em; }.shop-nav b { font-weight: 500; padding-left: 5px; }
+.shop-heading { padding: 22px 0 25px; }.eyebrow { font-size: 9px; font-weight: 600; letter-spacing: .13em; margin: 0 0 12px; }
+h1 { font-size: clamp(36px, 4.5vw, 62px); font-weight: 500; line-height: .98; letter-spacing: -.065em; margin: 0 0 16px; }
+.shop-heading>p:last-child { font-size: 11px; line-height: 1.6; color: #676b62; margin: 0; }
+.products { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.product-art { height: 130px; background: #dfdfd3; position: relative; overflow: hidden; }
+.product-art i, .product-art b { position: absolute; display: block; }
+.lamp { background: #e0d8c9; }.lamp i { width: 70%; height: 45%; left: 15%; top: 18%; border-radius: 90px 90px 8px 8px; background: #c96837; box-shadow: inset -12px 0 16px #a94e28; }.lamp b { width: 10%; height: 28%; top: 61%; left: 45%; background: #b05732; }.lamp b:after { content: ''; display: block; position: absolute; width: 380%; height: 7px; background: #ae5430; bottom: 0; left: -140%; border-radius: 50%; }
+.vase { background: #d8dfd5; }.vase i { width: 51%; height: 65%; bottom: 12%; left: 25%; border-radius: 18% 18% 42% 42%; background: #bac2ad; box-shadow: inset -14px 0 18px #8f9a81, 0 7px 7px #68735b30; }
+.stool { background: #e4dcd0; }.stool i { width: 67%; height: 25%; left: 17%; top: 26%; border-radius: 50%; background: #a67d51; box-shadow: 0 5px #8f653e; }.stool b { width: 9%; height: 43%; left: 26%; top: 45%; background: #976d44; transform: rotate(6deg); }.stool b:after { content: ''; position: absolute; height: 100%; width: 100%; background: #805d3d; left: 400%; transform: rotate(-12deg); }
+.product-title { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px; margin: 12px 0 9px; font-size: 10px; }.product-title strong { font-weight: 600; }
+.add-product { border-radius: 0; width: 100%; text-align: left; background: transparent; color: #464b41; border: 0; border-top: 1px solid #c9cbbf; font-size: 9px; padding: 8px 0; }.add-product span { float: right; }.add-product:hover { background: #daddcf; }
+.project-footer { display: flex; justify-content: space-between; gap: 8px; font-size: 9px; color: #6d7268; padding-top: 20px; }
+
+.shop-nav { font-size: 12px; padding-bottom: 24px; }
+.shop-nav strong { font-size: 22px; }
+.shop-heading { padding: 42px 0; }
+.shop-heading h1 { font-size: clamp(48px, 9vw, 82px); }
+.shop-heading>p:last-child { font-size: 14px; }
+.eyebrow { font-size: 11px; }
+.products { gap: 18px; }
+.product-art { height: clamp(140px, 23vw, 245px); }
+.product-title { font-size: 13px; margin-top: 16px; }
+.add-product { font-size: 12px; padding: 12px 0; }
+.project-footer { font-size: 11px; padding-top: 30px; }
+@media (max-width: 600px) { .preview { padding: 24px; } .shop-nav>span:nth-child(2) { display: none; } .products { gap: 10px; } .product-title { font-size: 11px; } }

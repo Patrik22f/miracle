@@ -1,60 +1,84 @@
-# macOS presentation modes
+# Miracle for macOS
 
-The first launch offers **Stealth** and **Helpful**. The choice and the automatic-recommendations toggle persist in UserDefaults. Settings are available from the mode button in the review UI and by right-clicking the menu-bar icon. The app stays in the menu bar after setup and on subsequent launches.
+Miracle lives in the menu bar. Left-click opens the prompt review popover; right-click opens its menu. Launching or reopening an already configured app does not open a separate review window. The review stays open when switching to another app; close it with its × button or the menu-bar icon. The global review shortcut is no longer registered. First launch alone presents onboarding.
 
-- **Stealth:** a blue dot signals a new result, including an empty skills list with effort/model advice. An orange dot signals an analysis error. Left-click opens the full review UI in a menu-bar popover and marks the result read.
-- **Helpful:** a non-activating panel appears above the focused prompt after analysis. If there is insufficient room above, it moves below and stays inside the current display. It does not take keyboard focus. Review prompt opens the full, keyboard-accessible editor. Dismissing the suggestion lasts until the prompt changes.
+## Presentation and settings
 
-## Automatic capture
+The mode menu contains only Stealth and Helpful. An adjacent information button shows the selected mode's explanation on demand.
 
-Cursor is the first supported automatic host (`com.todesktop.230313mzl4w4u92`). Automatic analysis requires a recognized, non-secure Cursor prompt; code editors, search fields and terminals are excluded from automatic analysis. Live capture also mirrors other accessible editable fields into the review window for explicit analysis, including supported Codex controls. Unknown or inaccessible controls keep the manual shortcut/paste fallback.
+- **Stealth:** a menu-bar dot signals a new recommendation; orange indicates an analysis error. Opening the review acknowledges the result.
+- **Helpful:** a nonactivating panel appears above the recognized AI prompt. It shows the recommended model, supported effort and optional skills while typing remains in the host app. The panel stays within the current display and can be dismissed for the current prompt.
 
-A single shared `LivePromptMonitor` samples Accessibility serially, waiting 350 ms between readable-field samples (longer when idle or permission is missing). A changed prompt waits another 900 ms before analysis. Editing, clearing the field, leaving the prompt, pausing recommendations or losing permission cancels pending work and invalidates old recommendations. A revision check also rejects late responses from canceled requests. Moving a prompt without editing it repositions the panel without repeating analysis.
+Settings is a separate window with General, Models and Skills tabs. Onboarding is not reused for settings. The main review and Helpful panel prioritize the prompt and model recommendation. Instructional footers, generic model explanations and raw warning paragraphs have been removed. A short source badge still distinguishes offline results from live search; errors remain visible.
 
-Opening Preflight’s review preserves its current prompt. Live capture can continue when focus returns to another app, even with the review window visible. Editing the review pauses Live capture until explicitly resumed; opening settings or entering demo mode suspends text reads. Pausing automatic recommendations alone leaves manual live capture available. `⌥⌘Return` retains explicit selected-text capture; automatic capture uses the complete prompt.
+The review shows only a single line from the beginning of the captured prompt, truncated with an ellipsis. It is plain read-only text without an input background or separate heading. Users compose their prompt in the AI application. The full captured text is still used for analysis. There is no prompt editor, Live switch, host-app picker or copy-prompt workflow in the interface.
 
-Accessibility permission is requested by the user during setup and may be skipped. The current permission state updates without relaunching. The build script reuses an Apple Development signing identity and installs outside iCloud at `~/Applications/Preflight.app`; `build/Preflight.app` links there. When migrating from an old ad-hoc build, remove its stale Accessibility entry and add the installed app once. Explicit ad-hoc builds still require renewed permission after changes.
+## Models and effort
 
-Both presentation modes use the imported-skill ranking backend. The full review keeps the Skill library, fit-score explanations, provenance, and selected-skill copy behavior. No prompt text is logged or persisted. `--diagnostics` enables system-log messages for monitor state changes only. The backend contract and data flow are unchanged.
+The captured application's bundle identifier automatically selects Cursor or Codex for recommendations and installation. Unsupported applications do not inherit the previous host's installation target. Claude integration is owned by the parallel lane.
 
-## Validation
+The macOS client maps the API's existing `fast`, `balanced` and `capable` profiles onto available models. It does not change the shared API contract or send extra prompt data. Model and effort are read-only recommendations. Users change them in their AI application; Miracle exposes no model or effort picker.
 
-From the repository root:
+- Cursor models come from a small documented catalog checked on 2026-09-30. Users enable the models available to their account in Settings. Only Grok 4.6 is enabled initially, matching the local account observed during verification. Grok models expose low, medium, high and xhigh when Custom effort is available; otherwise the account uses fixed medium. Models without verified configurable effort have no effort control.
+- Codex models are read from `$CODEX_HOME/models_cache.json` or `~/.codex/models_cache.json`. Only listed models and their declared reasoning levels are used. Hidden models are excluded. A missing catalog produces an empty state rather than invented options.
+
+Model selection is heuristic and bounded by the configured catalog. Refresh the Cursor catalog when host capabilities change. Do not infer account access from public model availability.
+
+The recommended supported effort appears as plain text. There are no dropdowns, segments, selection states or disabled input controls in the recommendation card.
+
+Sources: [Cursor models](https://cursor.com/docs/models), [Grok 4.6 effort](https://cursor.com/docs/models/grok-4-6), [Grok 4.7 effort](https://cursor.com/docs/models/grok-4-7), [Composer 2.5](https://cursor.com/docs/models/cursor-composer-2-5). Codex's installed model cache is the source for the local account.
+
+## Skill installation
+
+Each recommendation and library entry has an install action. Settings chooses This Mac or a project folder. Destinations are `.cursor/skills/<name>` and `.codex/skills/<name>` under the selected root. Project mode requires an explicitly chosen folder before installation. [Cursor's skill directories](https://cursor.com/docs/skills) document its destination; Codex's bundled skill installer documents `.codex/skills`.
+
+The main review and Helpful panel also offer **Install selected skills**. Checkboxes select the packages; installed packages are skipped and repeated clicks reuse pending installs. A failure is shown on its own row without stopping other selected installations. Retrying processes the remaining packages. GitHub rate-limit failures include the reset time when available.
+
+Installation copies a complete local skill folder or downloads the matching package from a public GitHub repository. Remote downloads use one immutable tree revision and include scripts, references and assets. No skill commands run during installation. Packages are staged, validated and moved into place only when complete. Existing destinations are never overwritten. Symlinks, invalid paths, mismatched names and oversized packages are rejected. The limits are 300 files and 20 MiB per package, with bounded network requests. Unsupported/private sources produce a recoverable error.
+
+The install state distinguishes progress, success and retryable failure. Library import remains a separate action that indexes skills for recommendations; importing is not installation. Installation does not submit a prompt or claim the host has already reloaded its skills.
+
+## Presentation from a real coding app
+
+Enable **Settings → General → Demo mode** to open the Shopfront website. Its normal resizable window stays open when switching to Cursor. The website contains no AI chat: write the presentation prompts in Cursor's actual prompt field. Miracle captures them through its normal Accessibility path, detects the host and shows recommendations through the real Stealth menu-bar review or Helpful panel above Cursor's input. Accessibility permission and automatic recommendations must be enabled.
+
+The source is in `Sources/Preflight/Resources/Demo/`; it is a standalone HTML/CSS/JavaScript storefront with no database or AI service. Open this folder in Cursor to use it as the example project. `README.md` in that folder contains both exact Czech prompts:
+
+1. Add a database for products, customers and orders → `supabase-postgres-best-practices`.
+2. Redesign like Apple.com, improve marketing copy and build a SwiftUI iOS app → `frontend-design`, `copywriting`, `swiftui-expert-skill`.
+
+While Demo mode is on, captured prompts use a small local keyword matcher and these four curated entries instead of the backend. Model and effort use the detected host's catalog, with the full bundled Cursor catalog available for presentation. Individual and selected install actions affect only in-memory demo state. The skill library searches the same offline entries. Neither analysis nor these install actions require network access. At the user's request no simulation labels appear in the presentation interface; Demo mode remains explicit in Settings. Turning it off closes Shopfront, clears its result and install state, and returns analysis to the normal API.
+
+Public skill references: [Supabase](https://github.com/supabase/agent-skills), [frontend-design](https://github.com/anthropics/skills/tree/main/skills/frontend-design), [copywriting](https://github.com/coreyhaines31/marketingskills/tree/main/skills/copywriting), [SwiftUI Expert](https://github.com/avdlee/swiftui-agent-skill).
+
+The web view only loads bundled files in a nonpersistent store, with remote navigation and network requests blocked. It has no bridge to the prompt model. Tests cover both scenarios, real-host capture data, no API calls in demo, stale-result rejection, return to normal analysis, isolated installation state and resource packaging.
+
+## Capture and build
+
+The shared live monitor follows accessible text fields. Recognized Cursor and Codex prompt labels trigger analysis after the typing pause; search, code editor and secure fields are excluded from automatic analysis. An unrecognized host field can be reanalyzed from the preview's refresh action. Live capture starts on, with no visible toggle; the obsolete saved-off preference is cleared during initialization. Settings suspends external text reads; demo keeps the same live capture path and substitutes local recommendations. Prompt text remains in memory.
+
+Build with `npm run macos:build` after quitting Miracle (or its previous Preflight build). The build reuses an Apple Development signing identity, installs at `~/Applications/Miracle.app`, and links `build/Miracle.app` there. The previous default Preflight installation is migrated only after the new bundle has been signed and verified. `build/Preflight.app` remains a compatibility symlink. The bundle identifier and internal Swift module stay unchanged to retain preferences and signing identity; the visible app and executable are named Miracle. `MIRACLE_APP_PATH` and `MIRACLE_CODESIGN_IDENTITY` accept custom values, with the previous `PREFLIGHT_` variables retained as aliases. Accessibility may need a one-time refresh when migrating from an ad-hoc build. `--diagnostics` logs capture state only.
+
+## Verification
+
+Run `npm test`, `npm run macos:test` and `git diff --check`. To run the optional real GitHub installation check into a disposable temporary folder:
 
 ```sh
-npm test
-npm run macos:test
-npm run macos:build
-open build/Preflight.app
+PREFLIGHT_INSTALL_SMOKE=1 swift test --package-path macos --build-system native --filter SkillInstallationTests
 ```
 
-Swift tests cover persisted onboarding choices, recognized/secure/editor fields, debounce, same-text deduplication, field changes, stale responses, cancellation, errors, empty results, dismissal and multi-display placement.
+Tests cover existing capture/cancellation, model profile mapping, account availability, model-specific effort, Codex cache filtering, persisted installation destinations, complete local and remote packages, path rejection, symlinks, refusal to overwrite and cleanup after failure. The live installation check verifies the React skill and its supporting rules.
 
-Manual checks:
+Local verification on 2026-09-30: 58 backend tests and 54 regular Swift tests passed; the optional live GitHub installation passed separately before GitHub's unauthenticated API quota was exhausted. The signed app bundle built successfully and passed strict signature verification. No skill was installed into a real user or project skill directory during automated verification; installation tests used disposable folders.
 
-1. Choose each mode in setup, relaunch and verify the saved choice.
-2. Grant Accessibility to the current build, start the API and focus Cursor's Prompt field.
-3. Write a React performance prompt without sending it. Verify the mode-specific presentation after the typing pause.
-4. Keep typing while Helpful is visible; the host must retain focus and old recommendations must disappear.
-5. Open the Stealth popover and verify the dot clears, editing works, and copy includes only selected skills.
-6. Clear the prompt, change fields/apps, dismiss Helpful and pause automatic recommendations; verify stale content does not return.
-7. Test a greeting, unavailable backend, missing permission, demo mode and an inaccessible control.
-8. Check a prompt near display edges and on a secondary display.
+Automated coverage includes automatic Cursor/Codex target changes, migration of the old Live preference, selected-only installation, retries, existing-package preservation and partial failure. Previous signed-build UI checks covered the separate Settings window, readable mode information, model and effort options, and individual installation actions. Codex UI automation is unavailable in this environment, so its live prompt-label detection still needs acceptance testing in the host app.
 
-Build/test success does not substitute for these host and display checks.
+The Miracle build was launched after migrating the default Preflight installation. Its renamed review and Settings window, new monogram and preserved Accessibility permission were checked in the running app. Bundle metadata, icon packaging, demo resource, both build symlinks and retained onboarding preference were verified. A manual reanalysis in the review showed the recommended model and effort as text, with no selectors in either the rendered card or Accessibility tree. Both presentation modes use this shared recommendation view. This check does not establish automatic prompt capture in Codex.
 
-### Integration verification — 2026-09-30
+The presentation build was checked with both Czech prompts typed into the real Cursor input without sending them. Miracle captured the prompts and showed Supabase for the first, then frontend-design, copywriting and SwiftUI Expert for the second. Individual and selected presentation installation states were verified. The review stayed open across app switches, and the separate Shopfront window remained available when Cursor regained focus. The user also confirmed that Helpful displayed all three skills above the real Cursor input after editing the second prompt.
 
-The integration of backend/live capture with the UI branch passed 58 backend tests, 36 Swift tests (including parameterized cancellation/lifecycle cases), 30 controlled relevance scenarios, the signed app build, and the live hybrid API smoke test. The running merged app showed the onboarding and review UI, retained Accessibility permission, and loaded the library with 176 installed and 10 public skills. Automated tests exercise the shared capture-to-recommendation path, geometry-only updates, pause/demo/setup cancellation, and the explicit shortcut while capture is paused.
+Manual checks for each new build: menu-bar-only opening; dedicated settings versus first-run onboarding; exactly two mode options; read-only prompt preview; automatic host detection; read-only model and effort advice; selected and individual installation; no focus theft while Helpful appears. Physical secondary displays and VoiceOver still require separate acceptance testing.
 
-A fresh foreground Cursor session, physical secondary displays, and VoiceOver remain manual acceptance checks for this merged build. The earlier UI-branch observations below are retained as historical evidence, not a replacement for those checks.
+## Brand artwork
 
-### UI branch verification — 2026-09-30
-
-- Passed: 8 backend tests, 14 Swift tests, app bundle build/ad-hoc signing, `git diff --check` and the live API smoke test.
-- Observed in the running app: onboarding rendering, switching/persisting both modes, permission refresh, manual review, packaged demo and live/empty result presentation.
-- Observed with Cursor Agents: automatic prompt capture and live Helpful recommendations, continued typing in Cursor while the panel was visible, and updated recommendations for the edited text. The user also confirmed the panel appeared above the prompt. Test-only additions were removed without sending the prompt.
-- User-confirmed in Cursor: Stealth's menu-bar notification and opening recommendations work.
-- Remaining manual coverage: physical secondary-display placement, VoiceOver navigation and other Cursor input variants. Geometry, unread-state transitions and field exclusion have automated coverage.
-
-The computer-use tool can manipulate a window without making that app the system's foreground application. Automatic monitoring deliberately uses the real foreground application; host checks must account for this when testing.
+Miracle uses a custom rounded m monogram. `Sources/Preflight/MiracleArtwork.swift` defines the shared vector geometry for the monochrome menu-bar template and interface mark. `Branding/main.swift` renders the same shape in white on a blue app-icon tile; the build produces the complete `.icns` size set. No external image service or font is required.

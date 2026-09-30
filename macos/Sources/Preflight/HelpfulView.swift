@@ -3,77 +3,59 @@ import SwiftUI
 extension AnalyzeResponse {
     var sourceLabel: String {
         switch meta.source {
-        case "hybrid": "Imported + public search"
-        case "installed": "Installed skills"
+        case "demo": ""
+        case "hybrid": "Library + search"
+        case "installed": "Installed"
         case "skills.sh": "Live search"
-        case "catalog": "Local catalog"
-        default: "No search needed"
+        case "catalog": "Offline"
+        default: ""
         }
     }
 }
 
 struct HelpfulView: View {
     @Bindable var model: AppModel
-    let review: () -> Void
+    let settings: AppSettings
+    let catalog: ModelCatalog
+    let installer: SkillInstallModel
     let dismiss: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Preflight", systemImage: "sparkle").font(.headline)
+                MiracleMark(size: 18).foregroundStyle(.tint)
+                Text("Miracle").font(.headline)
                 Spacer()
-                if let result = model.result {
-                    Text(model.demoMode ? "Demo fixture" : result.sourceLabel).font(.caption).foregroundStyle(.secondary)
-                }
                 Button(action: dismiss) { Image(systemName: "xmark") }
-                    .buttonStyle(.plain).help("Dismiss for this prompt").accessibilityLabel("Dismiss recommendation")
+                    .buttonStyle(.plain).accessibilityLabel("Dismiss recommendation")
             }
-            if let result = model.result {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if result.skills.isEmpty {
-                            Label("Your prompt can stand on its own.", systemImage: "checkmark.circle").font(.callout)
-                        }
-                        ForEach(result.skills) { skill in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Toggle(isOn: Binding(get: { model.selected.contains(skill.id) }, set: { enabled in
-                                    if enabled { model.selected.insert(skill.id) } else { model.selected.remove(skill.id) }
-                                })) { Text(skill.name).font(.callout.weight(.semibold)).lineLimit(2) }
-                                    .toggleStyle(.checkbox)
-                                Text(skill.reason).font(.caption).foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                Link(skill.provenance == "installed" ? "Open SKILL.md" : "View skill", destination: skill.url).font(.caption)
+            if let result = model.result, let host = model.targetApp {
+                ModelRecommendationView(result: result, host: host, settings: settings, catalog: catalog, compact: true, demo: model.demoMode)
+                if !result.skills.isEmpty {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(result.skills) { skill in
+                                RecommendedSkillRow(skill: skill, model: model, settings: settings, installer: installer, compact: true)
                             }
                         }
-                        Divider()
-                        HStack {
-                            Label("\(result.effort.level.capitalized) effort", systemImage: "slider.horizontal.3")
-                            Spacer()
-                            Text("\(result.model.profile.capitalized) model")
-                        }.font(.caption)
-                        Text(result.effort.reason).font(.caption).foregroundStyle(.secondary)
-                        Text(result.model.reason).font(.caption).foregroundStyle(.secondary)
-                        Text("Set model and effort in your AI app.").font(.caption).foregroundStyle(.secondary)
-                        ForEach(result.meta.warnings, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
-                    }.frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
             } else if let message = model.message {
-                Label("Couldn’t get recommendations", systemImage: "exclamationmark.circle").font(.callout.weight(.semibold))
-                Text(message).font(.caption).foregroundStyle(.secondary)
+                Label(message, systemImage: "exclamationmark.circle").font(.callout).foregroundStyle(.red)
             }
             HStack {
-                Button("Review prompt", action: review).buttonStyle(.borderless)
+                if let result = model.result {
+                    Text(result.sourceLabel).font(.caption).foregroundStyle(.secondary)
+                }
                 Spacer()
-                Button(model.selected.isEmpty ? "Copy prompt" : "Copy with skills") {
-                    model.copy(includeSkills: !model.selected.isEmpty)
-                }.buttonStyle(.borderedProminent).disabled(model.result == nil)
-            }
-            if !model.hasError, let message = model.message {
-                Text(message).font(.caption).foregroundStyle(.secondary)
+                if let result = model.result, !result.skills.isEmpty {
+                    InstallSelectedSkillsButton(skills: result.skills, selected: model.selected, host: model.targetApp,
+                        settings: settings, installer: installer, demoModel: model.demoMode ? model : nil)
+                }
             }
         }
         .padding(18)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(.separator.opacity(0.6)))
     }

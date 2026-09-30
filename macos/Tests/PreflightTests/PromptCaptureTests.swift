@@ -84,7 +84,7 @@ struct LivePromptStateTests {
         #expect(model.captureStatus == .paused)
     }
 
-    @Test("Demo and paused states reject live data; resuming follows new data")
+    @Test("Pause rejects live data while demo keeps following the coding app")
     func pauseDemoResume() {
         let model = AppModel()
         model.setLiveCaptureEnabled(false)
@@ -92,8 +92,8 @@ struct LivePromptStateTests {
         #expect(model.prompt.isEmpty)
         model.setLiveCaptureEnabled(true)
         model.setDemoMode(true)
-        model.receiveCapture(.captured(CapturedPrompt(text: "Ignored in demo", source: .fixture)))
-        #expect(model.prompt.isEmpty)
+        model.receiveCapture(.captured(CapturedPrompt(text: "Captured in demo", source: .fixture)))
+        #expect(model.prompt == "Captured in demo")
         model.setDemoMode(false)
         model.receiveCapture(.captured(CapturedPrompt(text: "Resumed", source: .fixture)))
         #expect(model.prompt == "Resumed")

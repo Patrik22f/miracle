@@ -24,7 +24,7 @@ final class GlobalHotKey {
         let status = RegisterEventHotKey(UInt32(kVK_Return), UInt32(cmdKey | optionKey), identifier, GetApplicationEventTarget(), 0, &hotKey)
         guard status == noErr else {
             stop()
-            throw ClientError.message("⌥⌘Return is already in use. You can open Preflight from the menu bar.")
+            throw ClientError.message("⌥⌘Return is already in use. You can open Miracle from the menu bar.")
         }
     }
 

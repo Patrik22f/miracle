@@ -1,6 +1,11 @@
 import SwiftUI
 
 struct SkillLibraryView: View {
+    let host: HostApp?
+    let settings: AppSettings
+    let installer: SkillInstallModel
+    var openSettings: () -> Void = {}
+    var demoModel: AppModel? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var library: SkillLibrary?
     @State private var query = ""
@@ -23,23 +28,20 @@ struct SkillLibraryView: View {
                 Spacer()
                 Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
             }
-            Text("Import installed skills and a public starter collection. Analyze also searches skills.sh for more candidates.")
-                .foregroundStyle(.secondary)
             HStack {
                 if let library {
-                    Text("\(library.installedCount) installed · \(library.publicCount) public").font(.headline)
+                    Text(demoModel == nil ? "\(library.installedCount) installed · \(library.publicCount) public" : "\(library.count) skills").font(.headline)
                 }
                 Spacer()
                 if isLoading { ProgressView().controlSize(.small) }
-                Button(library?.count == 0 ? "Import skills" : "Refresh imports") { importRevision += 1 }
-                    .disabled(isLoading)
+                if demoModel == nil {
+                    Button(library?.count == 0 ? "Import skills" : "Refresh imports") { importRevision += 1 }
+                        .disabled(isLoading)
+                }
             }
-            TextField("Search imported skills", text: $query)
+            TextField("Search skills", text: $query)
                 .textFieldStyle(.roundedBorder)
             if let error { Text(error).font(.callout).foregroundStyle(.secondary) }
-            if let library {
-                ForEach(library.warnings, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
-            }
             List(filteredSkills) { skill in
                 VStack(alignment: .leading, spacing: 5) {
                     HStack {
@@ -52,11 +54,13 @@ struct SkillLibraryView: View {
                         Text((skill.scopes + skill.purposes).joined(separator: " · "))
                             .font(.caption).foregroundStyle(.secondary)
                     }
-                    Link("Read SKILL.md", destination: skill.url).font(.caption)
+                    HStack {
+                        Link("Source", destination: skill.url).font(.caption)
+                        Spacer()
+                        SkillInstallButton(skill: InstallableSkill(skill), host: host, settings: settings, installer: installer, openSettings: openSettings, demoModel: demoModel)
+                    }
                 }.padding(.vertical, 5)
             }
-            Text("Imports index SKILL.md instructions; they do not install tools or execute skill commands. Copied local paths work in AI apps with access to this Mac.")
-                .font(.caption).foregroundStyle(.secondary)
         }
         .padding(20)
         .frame(minWidth: 560, idealWidth: 620, minHeight: 540)
@@ -64,6 +68,7 @@ struct SkillLibraryView: View {
     }
 
     @MainActor private func load(importSkills: Bool) async {
+        if demoModel != nil { library = DemoCatalog.library; return }
         isLoading = true
         error = nil
         defer { isLoading = false }
@@ -75,7 +80,7 @@ struct SkillLibraryView: View {
             return
         } catch {
             guard !Task.isCancelled else { return }
-            self.error = "\(error.localizedDescription) Start the API with npm start."
+            self.error = error.localizedDescription
         }
     }
 }
