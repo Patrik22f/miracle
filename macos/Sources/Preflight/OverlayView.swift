@@ -26,48 +26,41 @@ struct OverlayView: View {
             HStack {
                 DisplayModeControl(settings: settings, changed: modeChanged)
                 Spacer()
-                Picker("Application", selection: $model.targetApp) {
-                    ForEach(HostApp.allCases) { Text($0.title).tag($0) }
-                }.labelsHidden().fixedSize().accessibilityLabel("Target application")
+                if let host = model.targetApp {
+                    Label(host.title, systemImage: "app").font(.caption).foregroundStyle(.secondary)
+                }
             }
             Divider()
-            HStack {
-                Text("Your prompt").font(.headline)
-                Spacer()
-                Toggle("Live", isOn: Binding(get: { model.liveCaptureEnabled && !model.demoMode }, set: model.setLiveCaptureEnabled))
-                    .toggleStyle(.switch).controlSize(.mini).disabled(model.demoMode)
-                    .accessibilityLabel("Live capture")
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Prompt").font(.subheadline.weight(.medium))
+                    Spacer()
+                    if model.isLoading {
+                        ProgressView().controlSize(.mini).accessibilityLabel("Analyzing prompt")
+                        Button("Cancel", action: model.cancel).controlSize(.small)
+                    } else if !model.prompt.isEmpty, model.targetApp != nil {
+                        Button { model.analyze() } label: { Image(systemName: "arrow.clockwise") }
+                            .buttonStyle(.borderless).accessibilityLabel("Analyze prompt again")
+                    }
+                }
+                Text(promptPreview)
+                    .font(.callout).foregroundStyle(.secondary)
+                    .lineLimit(2).truncationMode(.tail)
+                    .frame(maxWidth: .infinity, minHeight: 32, alignment: .topLeading)
+                    .padding(10)
+                    .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+                    .accessibilityLabel("Prompt preview: \(promptPreview)")
             }
-            TextEditor(text: Binding(get: { model.prompt }, set: model.editPrompt))
-                .font(.body).scrollContentBackground(.hidden)
-                .frame(height: 90).padding(10)
-                .background(.background, in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(.separator))
-                .accessibilityLabel("Prompt to analyze")
-            HStack {
-                if model.captureStatus == .permissionRequired {
-                    Button("Enable Accessibility", action: AccessibilityPermission.request).controlSize(.small)
-                } else if let app = model.sourceApp {
-                    Label(app, systemImage: "text.cursor").font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-                if model.isLoading {
-                    ProgressView().controlSize(.small)
-                    Button("Cancel", action: model.cancel)
-                } else {
-                    Button("Analyze") { model.analyze() }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(model.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .keyboardShortcut(.return, modifiers: .command)
-                }
+            if model.captureStatus == .permissionRequired {
+                Button("Enable Accessibility", action: AccessibilityPermission.request).controlSize(.small)
             }
             if model.hasError, let message = model.message {
                 Label(message, systemImage: "exclamationmark.circle").font(.callout).foregroundStyle(.red)
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    if let result = model.result {
-                        ModelRecommendationView(result: result, host: model.targetApp, settings: settings, catalog: catalog)
+                    if let result = model.result, let host = model.targetApp {
+                        ModelRecommendationView(result: result, host: host, settings: settings, catalog: catalog)
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Text("Skills").font(.headline)
@@ -84,21 +77,19 @@ struct OverlayView: View {
                     } else if !model.isLoading, !model.hasError {
                         VStack(spacing: 10) {
                             Image(systemName: "text.magnifyingglass").font(.largeTitle).foregroundStyle(.tertiary)
-                            Text("Ready for your prompt").font(.callout).foregroundStyle(.secondary)
+                            Text("Waiting for a prompt").font(.callout).foregroundStyle(.secondary)
                         }.frame(maxWidth: .infinity).padding(.vertical, 34)
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
-            Divider()
-            HStack {
-                if !model.hasError, model.message == "Copied" {
-                    Label("Copied", systemImage: "checkmark").font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("Copy prompt") { model.copy(includeSkills: false) }.disabled(model.prompt.isEmpty)
-                if model.result?.skills.isEmpty == false {
-                    Button("Copy with skills") { model.copy(includeSkills: true) }
-                        .buttonStyle(.borderedProminent).disabled(model.selected.isEmpty)
+            if let result = model.result, !result.skills.isEmpty, model.targetApp != nil {
+                Divider()
+                HStack {
+                    Text("\(result.skills.filter { model.selected.contains($0.id) }.count) selected")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    InstallSelectedSkillsButton(skills: result.skills, selected: model.selected, host: model.targetApp,
+                        settings: settings, installer: installer, openSettings: openSettings)
                 }
             }
         }
@@ -108,5 +99,11 @@ struct OverlayView: View {
         .sheet(isPresented: $showingLibrary) {
             SkillLibraryView(host: model.targetApp, settings: settings, installer: installer, openSettings: openSettings)
         }
+    }
+
+    private var promptPreview: String {
+        guard model.targetApp != nil, !model.prompt.isEmpty else { return "—" }
+        let beginning = model.prompt.prefix(240).split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        return beginning + (model.prompt.count > 240 ? "…" : "")
     }
 }

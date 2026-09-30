@@ -18,11 +18,10 @@ final class AppModel {
     var hasUnreadRecommendation = false
     var helpfulDismissed = false
     var hasError = false
-    var targetApp: HostApp = .cursor
+    var targetApp: HostApp? { demoMode ? .cursor : HostApp.detect(source) }
     @ObservationIgnored var presentationChanged: () -> Void = {}
     @ObservationIgnored var permissionChanged: (Bool) -> Void = { _ in }
     @ObservationIgnored private let monitor: LivePromptMonitor
-    @ObservationIgnored private let preferences: UserDefaults?
     @ObservationIgnored private let analyzePrompt: @Sendable (String, String?) async throws -> AnalyzeResponse
     @ObservationIgnored private(set) var task: Task<Void, Never>?
     private var captureStarted = false
@@ -35,10 +34,9 @@ final class AppModel {
              try await APIClient().analyze(prompt: $0, app: $1)
          }) {
         self.monitor = monitor
-        self.preferences = preferences
         self.analyzePrompt = analyzePrompt
-        self.liveCaptureEnabled = preferences?.object(forKey: "liveCaptureEnabled") as? Bool ?? true
-        if !liveCaptureEnabled { captureStatus = .paused }
+        self.liveCaptureEnabled = true
+        preferences?.removeObject(forKey: "liveCaptureEnabled")
         monitor.onReading = { [weak self] reading in self?.receiveCapture(reading) }
         monitor.onPermission = { [weak self] granted in self?.permissionChanged(granted) }
         monitor.isEnabled = { [weak self] in
@@ -59,7 +57,6 @@ final class AppModel {
 
     func setLiveCaptureEnabled(_ enabled: Bool) {
         liveCaptureEnabled = enabled
-        preferences?.set(enabled, forKey: "liveCaptureEnabled")
         if !enabled { endAutomaticSession() }
         synchronizeCapture()
     }
@@ -100,7 +97,6 @@ final class AppModel {
     }
 
     private func applyCapture(_ captured: CapturedPrompt) {
-        if source != captured.source, let host = HostApp.detect(captured.source) { targetApp = host }
         if liveCaptureEnabled, automaticRecommendationsEnabled, let snapshot = captured.automaticSnapshot {
             receive(snapshot)
             return
@@ -115,7 +111,7 @@ final class AppModel {
 
     func editPrompt(_ text: String) {
         guard text != prompt else { return }
-        // Pause this editing session without changing the user's launch preference.
+        // Internal draft updates must not be overwritten by an in-flight capture.
         liveCaptureEnabled = false
         endAutomaticSession()
         synchronizeCapture()
@@ -177,7 +173,6 @@ final class AppModel {
         helpfulDismissed = false
         prompt = snapshot.text
         source = PromptSource(processID: snapshot.processID, bundleIdentifier: snapshot.bundleIdentifier, name: snapshot.appName)
-        if let host = HostApp.detect(source) { targetApp = host }
         lastFieldID = snapshot.fieldID
         guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         analyze(after: .milliseconds(900))

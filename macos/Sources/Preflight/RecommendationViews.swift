@@ -8,12 +8,15 @@ struct DisplayModeControl: View {
     var body: some View {
         HStack(spacing: 6) {
             Menu {
-                Picker("Display mode", selection: $settings.mode) {
-                    ForEach(DisplayMode.allCases) { mode in Label(mode.title, systemImage: mode.symbol).tag(mode) }
+                ForEach(DisplayMode.allCases) { mode in
+                    Button { settings.mode = mode } label: {
+                        if settings.mode == mode { Label(mode.title, systemImage: "checkmark") }
+                        else { Text(mode.title) }
+                    }
                 }
             } label: { Label(settings.mode.title, systemImage: settings.mode.symbol) }
                 .menuStyle(.borderlessButton).fixedSize()
-                .accessibilityLabel("Display mode")
+                .accessibilityLabel(settings.mode.title)
                 .onChange(of: settings.mode) { changed() }
             Button { showingInfo.toggle() } label: { Image(systemName: "info.circle").foregroundStyle(.secondary) }
                 .buttonStyle(.plain).accessibilityLabel("About \(settings.mode.title) mode")
@@ -110,13 +113,13 @@ struct ModelRecommendationView: View {
 
 struct SkillInstallButton: View {
     let skill: InstallableSkill
-    let host: HostApp
+    let host: HostApp?
     let settings: AppSettings
     let installer: SkillInstallModel
     var openSettings: (() -> Void)?
 
     var body: some View {
-        if let root = settings.installRoot(for: host) {
+        if let host, let root = settings.installRoot(for: host) {
             switch installer.state(skill, root: root) {
             case .installing:
                 HStack(spacing: 6) { ProgressView().controlSize(.mini); Text("Installing…") }.font(.caption)
@@ -128,10 +131,41 @@ struct SkillInstallButton: View {
                     Text(error).font(.caption).foregroundStyle(.red).frame(maxWidth: 280, alignment: .trailing)
                 }
             case nil:
-                Button(settings.installInProject ? "Install in project" : "Install in \(host.title)") { installer.install(skill, root: root) }
+                Button("Install") { installer.install(skill, root: root) }
                     .controlSize(.small)
+                    .accessibilityLabel("Install \(skill.name) in \(host.title)")
             }
-        } else if let openSettings { Button("Choose project…", action: openSettings).controlSize(.small) }
+        } else if host != nil, let openSettings { Button("Choose project…", action: openSettings).controlSize(.small) }
+    }
+}
+
+struct InstallSelectedSkillsButton: View {
+    let skills: [AnalyzeResponse.Skill]
+    let selected: Set<String>
+    let host: HostApp?
+    let settings: AppSettings
+    let installer: SkillInstallModel
+    var openSettings: (() -> Void)?
+
+    private var chosen: [InstallableSkill] { skills.filter { selected.contains($0.id) }.map(InstallableSkill.init) }
+
+    var body: some View {
+        if let host, let root = settings.installRoot(for: host) {
+            let states = chosen.map { installer.state($0, root: root) }
+            if states.contains(.installing) {
+                HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Installing selected skills…") }
+                    .font(.callout)
+            } else if !chosen.isEmpty, states.allSatisfy({ $0 == .installed }) {
+                Label("Selected skills installed", systemImage: "checkmark.circle.fill")
+                    .font(.callout).foregroundStyle(.secondary)
+            } else {
+                Button("Install selected skills") {
+                    installer.installSelected(skills.map(InstallableSkill.init), ids: selected, root: root)
+                }.buttonStyle(.borderedProminent).disabled(chosen.isEmpty)
+            }
+        } else if host != nil, let openSettings {
+            Button("Choose project…", action: openSettings).buttonStyle(.borderedProminent)
+        }
     }
 }
 

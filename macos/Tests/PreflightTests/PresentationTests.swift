@@ -19,7 +19,7 @@ func settingsPersist() throws {
     #expect(next.completedOnboarding)
 }
 
-@Test("Cursor monitoring accepts a prompt but excludes editors, search and secure fields")
+@Test("AI prompt monitoring accepts Cursor and Codex labels but excludes editors, search and secure fields")
 func promptPolicy() {
     let cursor = "com.todesktop.230313mzl4w4u92"
     #expect(PromptPolicy.accepts(bundleID: cursor, role: kAXTextAreaRole, subrole: "", label: "Chat input"))
@@ -29,6 +29,9 @@ func promptPolicy() {
     #expect(!PromptPolicy.accepts(bundleID: cursor, role: kAXTextFieldRole, subrole: "", label: "Search chat"))
     #expect(!PromptPolicy.accepts(bundleID: cursor, role: kAXTextFieldRole, subrole: kAXSecureTextFieldSubrole, label: "Prompt"))
     #expect(!PromptPolicy.accepts(bundleID: "com.apple.Notes", role: kAXTextAreaRole, subrole: "", label: "Chat"))
+    #expect(PromptPolicy.accepts(bundleID: "com.openai.codex", role: kAXTextAreaRole, subrole: "", label: "Send a follow-up"))
+    #expect(!PromptPolicy.accepts(bundleID: "com.openai.codex", role: kAXTextFieldRole, subrole: "", label: "Search chats"))
+    #expect(!PromptPolicy.accepts(bundleID: "com.openai.codex", role: kAXTextAreaRole, subrole: kAXSecureTextFieldSubrole, label: "Prompt"))
 }
 
 @Test("Helpful placement respects edges and secondary displays")

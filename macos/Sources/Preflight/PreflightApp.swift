@@ -81,7 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         helpfulPanel?.orderOut(nil)
         guard let button = statusItem?.button else { return }
         let controller = NSHostingController(rootView: reviewView { [weak self] in self?.popover.performClose(nil) })
-        let height = min(740, (button.window?.screen?.visibleFrame.height ?? 800) - 40)
+        let height = min(660, (button.window?.screen?.visibleFrame.height ?? 800) - 40)
         popover.contentViewController = controller
         popover.contentSize = NSSize(width: 560, height: height)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
@@ -94,8 +94,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         let menu = NSMenu()
         add("Open Preflight", action: #selector(showReview), to: menu)
         menu.addItem(.separator())
-        let modeItem = NSMenuItem(title: "Display mode", action: nil, keyEquivalent: "")
-        let modes = NSMenu(title: "Display mode")
+        let modeItem = NSMenuItem(title: settings.mode.title, action: nil, keyEquivalent: "")
+        let modes = NSMenu(title: settings.mode.title)
         modeItem.submenu = modes
         menu.addItem(modeItem)
         let stealth = add("Stealth", action: #selector(chooseStealth), to: modes)
@@ -103,9 +103,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         let helpful = add("Helpful", action: #selector(chooseHelpful), to: modes)
         helpful.state = settings.mode == .helpful ? .on : .off
         add(settings.automatic ? "Pause automatic recommendations" : "Resume automatic recommendations", action: #selector(toggleAutomatic), to: menu)
-        let capture = add("Live capture", action: #selector(toggleLiveCapture), to: menu)
-        capture.state = model.liveCaptureEnabled && !model.demoMode ? .on : .off
-        capture.isEnabled = !model.demoMode
         add("Enable Accessibility…", action: #selector(permission), to: menu)
         add("Settings…", action: #selector(showSettings), to: menu)
         add("Try demo", action: #selector(demo), to: menu)
@@ -236,7 +233,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     @objc private func chooseHelpful() { settings.mode = .helpful; settingsChanged() }
     @objc private func toggleAutomatic() { settings.automatic.toggle(); settingsChanged() }
     @objc func demo() { model.loadDemo(); showReview() }
-    @objc private func toggleLiveCapture() { model.setLiveCaptureEnabled(!model.liveCaptureEnabled) }
     @objc private func permission() { AccessibilityPermission.request() }
     @objc func quit() { NSApp.terminate(nil) }
     func applicationWillTerminate(_ notification: Notification) {

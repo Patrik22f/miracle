@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SkillLibraryView: View {
-    let host: HostApp
+    let host: HostApp?
     let settings: AppSettings
     let installer: SkillInstallModel
     var openSettings: () -> Void = {}

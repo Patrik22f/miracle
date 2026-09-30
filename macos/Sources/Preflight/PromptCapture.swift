@@ -41,13 +41,13 @@ enum CaptureStatus: Equatable, Sendable {
         switch self {
         case .paused: "Live capture paused. Your prompt stays here."
         case .permissionRequired: "Allow Accessibility to follow text in other apps."
-        case .waiting: "Click a text field in another app to start."
+        case .waiting: "Waiting for a prompt in Cursor or Codex."
         case .reviewing: "Ready. Switch to another app to keep following your prompt."
         case .following(let app): "Following the focused text field in \(app)."
-        case .unsupported(let app): "Focus a supported text field in \(app), or paste here."
+        case .unsupported(let app): "Focus a supported prompt in \(app)."
         case .secureField: "Password fields are excluded from capture."
-        case .unreadable(let app): "\(app) isn’t sharing this field’s text. Copy and paste it here."
-        case .tooLong: "This field exceeds 12,000 characters. Select less and press ⌥⌘Return."
+        case .unreadable(let app): "\(app) isn’t sharing this prompt’s text."
+        case .tooLong: "This prompt exceeds 12,000 characters."
         case .suspended: "Live capture waits while your Mac session is inactive."
         }
     }

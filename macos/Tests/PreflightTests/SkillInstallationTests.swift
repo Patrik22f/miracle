@@ -3,6 +3,43 @@ import Testing
 @testable import Preflight
 
 struct SkillInstallationTests {
+    @MainActor @Test("Selected installation skips existing and unselected skills, isolates failures and supports retry")
+    func selectedPackages() async throws {
+        let root = try temporary()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let target = root.appendingPathComponent("target")
+        let names = ["existing", "first", "second", "unselected"]
+        let skills = try names.map { name in
+            let source = root.appendingPathComponent("sources/\(name)/SKILL.md")
+            try write("---\nname: \(name == "second" ? "mismatch" : name)\n---\nInstructions", at: source)
+            return InstallableSkill(id: name, name: name, url: source)
+        }
+        try write("Keep this installed version", at: target.appendingPathComponent("existing/SKILL.md"))
+        let model = SkillInstallModel()
+        #expect(model.installSelected(skills, ids: [], root: target).isEmpty)
+        let selected: Set<String> = ["existing", "first", "second"]
+        let pending = model.installSelected(skills, ids: selected, root: target)
+        #expect(pending.count == 2)
+        #expect(model.state(skills[1], root: target) == .installing)
+        let repeated = model.installSelected(skills, ids: selected, root: target)
+        for task in pending + repeated { await task.value }
+        #expect(model.state(skills[0], root: target) == .installed)
+        #expect(model.state(skills[1], root: target) == .installed)
+        guard case .failed = model.state(skills[2], root: target) else {
+            Issue.record("The mismatched skill must report a failure independently")
+            return
+        }
+        #expect(!FileManager.default.fileExists(atPath: target.appendingPathComponent("second").path))
+        #expect(!FileManager.default.fileExists(atPath: target.appendingPathComponent("unselected").path))
+        #expect(try String(contentsOf: target.appendingPathComponent("existing/SKILL.md"), encoding: .utf8) == "Keep this installed version")
+        try write("---\nname: second\n---\nInstructions", at: skills[2].url)
+        let retry = model.installSelected(skills, ids: selected, root: target)
+        #expect(retry.count == 1)
+        for task in retry { await task.value }
+        #expect(model.state(skills[2], root: target) == .installed)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: target.path).sorted() == ["existing", "first", "second"])
+    }
+
     private func temporary() throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("preflight-install-test-\(UUID())")
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)

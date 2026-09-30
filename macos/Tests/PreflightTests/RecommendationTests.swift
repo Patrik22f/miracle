@@ -3,18 +3,39 @@ import Testing
 @testable import Preflight
 
 struct RecommendationTests {
-    @MainActor @Test("Live defaults on and manual editing does not persist a disabled preference")
+    @MainActor @Test("Live starts on even when an older build saved a disabled preference")
     func liveDefault() throws {
         let suite = "Preflight.live-default.\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(false, forKey: "liveCaptureEnabled")
         let model = AppModel(preferences: defaults)
         #expect(model.liveCaptureEnabled)
-        model.editPrompt("Manual draft")
+        #expect(defaults.object(forKey: "liveCaptureEnabled") == nil)
+        model.setLiveCaptureEnabled(false)
         #expect(!model.liveCaptureEnabled)
         #expect(AppModel(preferences: defaults).liveCaptureEnabled)
-        model.setLiveCaptureEnabled(false)
-        #expect(!AppModel(preferences: defaults).liveCaptureEnabled)
+    }
+
+    @MainActor @Test("The captured app determines the target and unsupported apps never inherit it")
+    func automaticTarget() async throws {
+        let model = AppModel { _, _ in try .demo() }
+        #expect(model.targetApp == nil)
+        let cursor = CapturedPrompt.cursorFixture()
+        model.receiveCapture(.captured(cursor))
+        await model.task?.value
+        #expect(model.targetApp == .cursor)
+        let codex = CapturedPrompt(text: cursor.text,
+            source: .init(processID: 456, bundleIdentifier: "com.openai.codex", name: "ChatGPT"),
+            fieldID: UUID(), supportsAutomaticRecommendations: true)
+        model.receiveCapture(.captured(codex))
+        #expect(model.targetApp == .codex)
+        #expect(model.result == nil)
+        await model.task?.value
+        #expect(model.result != nil)
+        model.receiveCapture(.captured(.init(text: "Unrelated field", source: .fixture)))
+        #expect(model.targetApp == nil)
+        #expect(model.result == nil)
     }
 
     @Test("Host detection does not confuse ChatGPT with Codex")

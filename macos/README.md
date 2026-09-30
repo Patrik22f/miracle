@@ -4,16 +4,18 @@ Preflight lives in the menu bar. Left-click opens the prompt review popover; rig
 
 ## Presentation and settings
 
-The review has a display-mode submenu and an adjacent information button. Mode explanations appear on demand.
+The mode menu contains only Stealth and Helpful. An adjacent information button shows the selected mode's explanation on demand.
 
 - **Stealth:** a menu-bar dot signals a new recommendation; orange indicates an analysis error. Opening the review acknowledges the result.
-- **Helpful:** a nonactivating panel appears above the Cursor prompt. It shows the recommended model, supported effort and optional skills while typing remains in Cursor. The panel stays within the current display and can be dismissed for the current prompt.
+- **Helpful:** a nonactivating panel appears above the recognized AI prompt. It shows the recommended model, supported effort and optional skills while typing remains in the host app. The panel stays within the current display and can be dismissed for the current prompt.
 
 Settings is a separate window with General, Models and Skills tabs. Onboarding is not reused for settings. The main review and Helpful panel prioritize the prompt and model recommendation. Instructional footers, generic model explanations and raw warning paragraphs have been removed. A short source badge still distinguishes offline results from live search; errors remain visible.
 
+The review shows only a two-line, read-only preview of the beginning of the captured prompt. Users compose their prompt in the AI application. The full captured text is still used for analysis. There is no prompt editor, Live switch, host-app picker or copy-prompt workflow in the interface.
+
 ## Models and effort
 
-The captured application's bundle identifier selects Cursor or Codex. The target can also be chosen in the review. Editing a captured prompt keeps its target application. Claude integration is owned by the parallel lane.
+The captured application's bundle identifier automatically selects Cursor or Codex for recommendations and installation. Unsupported applications do not inherit the previous host's installation target. Claude integration is owned by the parallel lane.
 
 The macOS client maps the API's existing `fast`, `balanced` and `capable` profiles onto available models. It does not change the shared API contract or send extra prompt data. This is a recommendation selection, not automation of another application's model picker.
 
@@ -30,13 +32,15 @@ Sources: [Cursor models](https://cursor.com/docs/models), [Grok 4.6 effort](http
 
 Each recommendation and library entry has an install action. Settings chooses This Mac or a project folder. Destinations are `.cursor/skills/<name>` and `.codex/skills/<name>` under the selected root. Project mode requires an explicitly chosen folder before installation. [Cursor's skill directories](https://cursor.com/docs/skills) document its destination; Codex's bundled skill installer documents `.codex/skills`.
 
+The main review and Helpful panel also offer **Install selected skills**. Checkboxes select the packages; installed packages are skipped and repeated clicks reuse pending installs. A failure is shown on its own row without stopping other selected installations. Retrying processes the remaining packages. GitHub rate-limit failures include the reset time when available.
+
 Installation copies a complete local skill folder or downloads the matching package from a public GitHub repository. Remote downloads use one immutable tree revision and include scripts, references and assets. No skill commands run during installation. Packages are staged, validated and moved into place only when complete. Existing destinations are never overwritten. Symlinks, invalid paths, mismatched names and oversized packages are rejected. The limits are 300 files and 20 MiB per package, with bounded network requests. Unsupported/private sources produce a recoverable error.
 
 The install state distinguishes progress, success and retryable failure. Library import remains a separate action that indexes skills for recommendations; importing is not installation. Installation does not submit a prompt or claim the host has already reloaded its skills.
 
 ## Capture and build
 
-The existing shared live monitor follows accessible text fields; recognized Cursor prompts trigger analysis after the typing pause. Capturing text from Codex selects its model catalog, while automatic analysis still requires the existing recognized-prompt policy. Unsupported fields can be pasted into the review. Live capture defaults to on. Editing inside Preflight pauses it for that session without persisting an off preference; an explicit toggle remains a saved user choice. Settings and demo mode suspend external text reads. Prompt text remains in memory.
+The shared live monitor follows accessible text fields. Recognized Cursor and Codex prompt labels trigger analysis after the typing pause; search, code editor and secure fields are excluded from automatic analysis. An unrecognized host field can be reanalyzed from the preview's refresh action. Live capture starts on, with no visible toggle; the obsolete saved-off preference is cleared during initialization. Settings and demo mode suspend external text reads. Prompt text remains in memory.
 
 Build with `npm run macos:build` after quitting Preflight. The build reuses an Apple Development signing identity, installs at `~/Applications/Preflight.app`, and links `build/Preflight.app` there. Accessibility may need a one-time refresh when migrating from an ad-hoc build. `--diagnostics` logs capture state only.
 
@@ -50,8 +54,8 @@ PREFLIGHT_INSTALL_SMOKE=1 swift test --package-path macos --build-system native 
 
 Tests cover existing capture/cancellation, model profile mapping, account availability, model-specific effort, Codex cache filtering, persisted installation destinations, complete local and remote packages, path rejection, symlinks, refusal to overwrite and cleanup after failure. The live installation check verifies the React skill and its supporting rules.
 
-Local verification on 2026-09-30: 58 backend tests and 46 regular Swift tests passed; the optional live GitHub installation also passed separately. The signed app bundle built successfully and passed strict signature verification. No skill was installed into a real user or project skill directory during automated verification; installation tests used disposable folders.
+Local verification on 2026-09-30: 58 backend tests and 48 regular Swift tests passed; the optional live GitHub installation passed separately before GitHub's unauthenticated API quota was exhausted. The signed app bundle built successfully and passed strict signature verification. No skill was installed into a real user or project skill directory during automated verification; installation tests used disposable folders.
 
-The running signed build was checked through its menu-bar popover: the mode information wraps fully, the review has an opaque system background, and a live React-task analysis shows the model above three skill installation actions. Switching Cursor to Codex updates the model, supported effort levels and installation target. The dedicated Settings window and its model list were also inspected. Install completion and failure were verified by automated package tests, not by modifying the user's skill directories. The final effort menu was replaced with a native segmented control; the Live launch preference has a regression test.
+Automated coverage includes automatic Cursor/Codex target changes, migration of the old Live preference, selected-only installation, retries, existing-package preservation and partial failure. Previous signed-build UI checks covered the separate Settings window, readable mode information, model and effort options, and individual installation actions. Codex UI automation is unavailable in this environment, so its live prompt-label detection still needs acceptance testing in the host app.
 
-Manual checks for each new build: menu-bar-only opening; dedicated settings versus first-run onboarding; mode submenu and information popover; model and effort menus for both target apps; install progress/error/success; keyboard copy and paste; no focus theft while Helpful appears. Physical secondary displays and VoiceOver still require separate acceptance testing.
+Manual checks for each new build: menu-bar-only opening; dedicated settings versus first-run onboarding; exactly two mode options; read-only prompt preview; automatic host detection; model and effort controls; selected and individual installation; no focus theft while Helpful appears. Physical secondary displays and VoiceOver still require separate acceptance testing.

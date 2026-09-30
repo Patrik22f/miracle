@@ -19,9 +19,8 @@ struct SettingsView: View {
                 switch page {
                 case .general:
                     Section("Presentation") {
-                        LabeledContent("Display mode") { DisplayModeControl(settings: settings, changed: changed) }
+                        LabeledContent("Mode") { DisplayModeControl(settings: settings, changed: changed) }
                         Toggle("Automatic recommendations", isOn: $settings.automatic).onChange(of: settings.automatic) { changed() }
-                        Toggle("Live capture", isOn: Binding(get: { model.liveCaptureEnabled }, set: model.setLiveCaptureEnabled))
                     }
                     Section("Permissions") {
                         LabeledContent("Accessibility") {

@@ -28,8 +28,8 @@ struct HelpfulView: View {
                 Button(action: dismiss) { Image(systemName: "xmark") }
                     .buttonStyle(.plain).accessibilityLabel("Dismiss recommendation")
             }
-            if let result = model.result {
-                ModelRecommendationView(result: result, host: model.targetApp, settings: settings, catalog: catalog, compact: true)
+            if let result = model.result, let host = model.targetApp {
+                ModelRecommendationView(result: result, host: host, settings: settings, catalog: catalog, compact: true)
                 if !result.skills.isEmpty {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 4) {
@@ -47,9 +47,10 @@ struct HelpfulView: View {
                     Text(result.sourceLabel).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button(model.selected.isEmpty ? "Copy prompt" : "Copy with skills") {
-                    model.copy(includeSkills: !model.selected.isEmpty)
-                }.buttonStyle(.borderedProminent).disabled(model.result == nil)
+                if let result = model.result, !result.skills.isEmpty {
+                    InstallSelectedSkillsButton(skills: result.skills, selected: model.selected, host: model.targetApp,
+                        settings: settings, installer: installer)
+                }
             }
         }
         .padding(18)

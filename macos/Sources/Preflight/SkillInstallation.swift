@@ -162,6 +162,14 @@ actor SkillInstaller {
         request.timeoutInterval = 20
         request.setValue("Preflight", forHTTPHeaderField: "User-Agent")
         let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        if let http = response as? HTTPURLResponse,
+           http.statusCode == 429 || (http.statusCode == 403 && http.value(forHTTPHeaderField: "X-RateLimit-Remaining") == "0") {
+            if let value = http.value(forHTTPHeaderField: "X-RateLimit-Reset"), let reset = TimeInterval(value) {
+                let time = Date(timeIntervalSince1970: reset).formatted(date: .omitted, time: .shortened)
+                throw failure("GitHub’s download limit was reached. Try again after \(time).")
+            }
+            throw failure("GitHub’s download limit was reached. Try again later.")
+        }
         guard let http = response as? HTTPURLResponse, http.statusCode == 200,
               response.url?.scheme == "https", ["api.github.com", "raw.githubusercontent.com"].contains(response.url?.host ?? "") else {
             throw failure("The skill could not be downloaded from GitHub. Try again later.")
@@ -195,16 +203,25 @@ final class SkillInstallModel {
         return nil
     }
 
-    func install(_ skill: InstallableSkill, root: URL) {
+    @discardableResult
+    func installSelected(_ skills: [InstallableSkill], ids: Set<String>, root: URL) -> [Task<Void, Never>] {
+        skills.filter { ids.contains($0.id) }.compactMap { install($0, root: root) }
+    }
+
+    @discardableResult
+    func install(_ skill: InstallableSkill, root: URL) -> Task<Void, Never>? {
         let key = key(skill, root: root)
-        guard states[key] != .installing else { return }
+        if let pending = tasks[key] { return pending }
+        guard state(skill, root: root) != .installed else { return nil }
         states[key] = .installing
-        tasks[key] = Task { [weak self, installer] in
+        let task = Task { [weak self, installer] in
             do {
                 _ = try await installer.install(skill, into: root)
                 self?.states[key] = .installed
             } catch { self?.states[key] = .failed(error.localizedDescription) }
             self?.tasks[key] = nil
         }
+        tasks[key] = task
+        return task
     }
 }
