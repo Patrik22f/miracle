@@ -38,9 +38,16 @@ struct HelpfulView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                MiracleMark(size: 18).foregroundStyle(.tint)
-                Text("Miracle").font(.headline)
-                Spacer()
+                HStack {
+                    MiracleMark(size: 18).foregroundStyle(.tint)
+                    Text("Miracle").font(.headline)
+                    Spacer()
+                    Image(systemName: "line.3.horizontal").font(.caption).foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
+                .frame(height: 28)
+                .overlay { HelpfulPanelDragArea().accessibilityHidden(true) }
+                .help("Move recommendations")
                 Button(action: dismiss) { Image(systemName: "xmark") }
                     .buttonStyle(.plain).accessibilityLabel("Dismiss recommendation")
             }

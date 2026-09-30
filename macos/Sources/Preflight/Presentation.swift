@@ -70,7 +70,47 @@ enum PanelPlacement {
     }
 }
 
+struct HelpfulPanelPlacement {
+    private(set) var topLeft: CGPoint?
+
+    mutating func rememberUserFrame(_ frame: CGRect) {
+        topLeft = CGPoint(x: frame.minX, y: frame.maxY)
+    }
+
+    func frame(above anchor: CGRect, size: CGSize, visibleFrame: CGRect) -> CGRect {
+        guard let topLeft else {
+            return PanelPlacement.frame(above: anchor, size: size, visibleFrame: visibleFrame)
+        }
+        let width = min(size.width, visibleFrame.width)
+        let height = min(size.height, visibleFrame.height)
+        let x = min(max(topLeft.x, visibleFrame.minX), visibleFrame.maxX - width)
+        let y = min(max(topLeft.y - height, visibleFrame.minY), visibleFrame.maxY - height)
+        return CGRect(x: x, y: y, width: width, height: height)
+    }
+}
+
 final class RecommendationPanel: NSPanel {
+    private var placement = HelpfulPanelPlacement()
+    private var dragStartOrigin: CGPoint?
+    var isBeingDragged: Bool { dragStartOrigin != nil && NSEvent.pressedMouseButtons & 1 != 0 }
+
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
+
+    func beginMoving(with event: NSEvent) {
+        dragStartOrigin = frame.origin
+        // AppKit hands tracking to Window Server and returns before mouse-up.
+        performDrag(with: event)
+    }
+
+    func place(above anchor: CGRect, size: CGSize, visibleFrame: CGRect) {
+        guard !isBeingDragged else { return }
+        if let dragStartOrigin {
+            if frame.origin != dragStartOrigin { placement.rememberUserFrame(frame) }
+            self.dragStartOrigin = nil
+        }
+        let bounds = placement.topLeft != nil ? screen?.visibleFrame.insetBy(dx: 8, dy: 8) ?? visibleFrame : visibleFrame
+        let target = placement.frame(above: anchor, size: size, visibleFrame: bounds)
+        if frame != target { setFrame(target, display: true) }
+    }
 }

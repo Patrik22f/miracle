@@ -48,6 +48,48 @@ func placement() {
     #expect(converted.minY == 1000)
 }
 
+@Test("Helpful follows its prompt until the user chooses a position")
+func helpfulManualPosition() {
+    var placement = HelpfulPanelPlacement()
+    let screen = CGRect(x: 0, y: 0, width: 1440, height: 1000)
+    let size = CGSize(width: 420, height: 300)
+    let anchor = CGRect(x: 600, y: 100, width: 500, height: 100)
+    #expect(placement.frame(above: anchor, size: size, visibleFrame: screen)
+        == PanelPlacement.frame(above: anchor, size: size, visibleFrame: screen))
+
+    let moved = CGRect(x: 150, y: 420, width: 420, height: 300)
+    placement.rememberUserFrame(moved)
+    let nextPrompt = CGRect(x: 900, y: 300, width: 400, height: 150)
+    #expect(placement.frame(above: nextPrompt, size: size, visibleFrame: screen) == moved)
+    let taller = placement.frame(above: nextPrompt, size: CGSize(width: 420, height: 560), visibleFrame: screen)
+    #expect(taller.minX == moved.minX)
+    #expect(taller.maxY == moved.maxY)
+    #expect(taller.height == 560)
+}
+
+@Test("Helpful manual placement stays on a secondary display and recovers when it is removed")
+func helpfulManualDisplays() {
+    var placement = HelpfulPanelPlacement()
+    let moved = CGRect(x: -1300, y: 500, width: 420, height: 300)
+    placement.rememberUserFrame(moved)
+    let primary = CGRect(x: 0, y: 0, width: 1440, height: 1000)
+    let secondary = CGRect(x: -1440, y: 100, width: 1440, height: 900)
+    let anchor = CGRect(x: 600, y: 100, width: 500, height: 100)
+    #expect(placement.frame(above: anchor, size: moved.size, visibleFrame: secondary) == moved)
+    let recovered = placement.frame(above: anchor, size: moved.size, visibleFrame: primary)
+    #expect(primary.contains(recovered))
+    #expect(recovered.maxY == moved.maxY)
+}
+
+@Test("A moved Helpful panel fits a smaller display and keeps its header reachable")
+func helpfulManualClamping() {
+    var placement = HelpfulPanelPlacement()
+    placement.rememberUserFrame(CGRect(x: 1400, y: -200, width: 420, height: 300))
+    let screen = CGRect(x: 0, y: 0, width: 300, height: 200)
+    let frame = placement.frame(above: .zero, size: CGSize(width: 420, height: 560), visibleFrame: screen)
+    #expect(frame == screen)
+}
+
 @MainActor @Test("Rapid edits send only the settled prompt, and unchanged polls do not repeat it")
 func debounce() async throws {
     let recorder = AnalysisRecorder()

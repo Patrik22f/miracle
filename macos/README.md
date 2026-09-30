@@ -7,7 +7,7 @@ Miracle lives in the menu bar. Left-click opens the prompt review popover; right
 The mode menu contains only Stealth and Helpful. An adjacent information button shows the selected mode's explanation on demand.
 
 - **Stealth:** a menu-bar dot signals a new recommendation; orange indicates an analysis error. Opening the review acknowledges the result.
-- **Helpful:** a nonactivating panel appears above the recognized AI prompt. It shows the recommended model, supported effort and optional skills while typing remains in the host app. The panel stays within the current display and can be dismissed for the current prompt.
+- **Helpful:** a nonactivating panel appears above the recognized AI prompt. It shows the recommended model, supported effort and optional skills while typing remains in the host app. Drag its header to move it, including to another display. The chosen position lasts for the app session, survives prompt changes and keeps the header in place when content height changes. The panel stays within its display's usable area and can be dismissed for the current prompt. Dragging uses native window tracking; the close button and content controls remain separate.
 
 Settings is a separate window with General, Prompts, Models and Skills tabs. Onboarding is not reused for settings. The main review and Helpful panel prioritize the prompt and model recommendation. Instructional footers, generic model explanations and raw warning paragraphs have been removed. A short source badge still distinguishes offline results from live search; errors remain visible.
 
@@ -65,6 +65,8 @@ The shared live monitor follows accessible text fields. The review includes a ch
 Build with `npm run macos:build` after quitting Miracle (or its previous Preflight build). The build reuses an Apple Development signing identity, installs at `~/Applications/Miracle.app`, and links `build/Miracle.app` there. The previous default Preflight installation is migrated only after the new bundle has been signed and verified. `build/Preflight.app` remains a compatibility symlink. The bundle identifier and internal Swift module stay unchanged to retain preferences and signing identity; the visible app and executable are named Miracle. `MIRACLE_APP_PATH` and `MIRACLE_CODESIGN_IDENTITY` accept custom values, with the previous `PREFLIGHT_` variables retained as aliases. Accessibility may need a one-time refresh when migrating from an ad-hoc build. `--diagnostics` logs capture state only.
 
 ## Verification
+
+Movable Helpful panel: 148 backend tests passed, and the Swift suite reported 84 tests with two optional live checks skipped. Placement tests cover automatic anchoring before dragging, retained position across prompt/height changes, secondary-display coordinates and clamping after display changes. The signed build was launched, the header was inspected in the running panel, and the user confirmed that dragging works, the new position survives further typing, and Cursor remains usable. Physical cross-display dragging still needs separate verification.
 
 Demo suggested prompts: the signed installed bundle was rebuilt and launched. A live request using its bundled Shopfront folder returned three validated suggestions from Groq (`openai/gpt-oss-120b`), and a repeat used the backend cache. The Swift suite reported 81 tests with two optional live checks skipped. Tests cover the demo request boundary, provider errors, stale responses across mode changes and preservation of the saved project/preferences.
 
