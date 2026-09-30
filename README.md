@@ -1,4 +1,4 @@
-# Miracle
+# Miracle / Zázrak
 
 **Model, effort and skills for your next prompt.**
 
@@ -43,22 +43,7 @@ For a UI-only demo, choose **Try demo** from the menu bar. Demo mode uses the bu
 - Model capability profile and effort advice; deterministic heuristics keep the demo fast and key-free.
 - Shared schemas, example request/response, macOS offline fixture, tests, and CI.
 
-## Two people, two lanes
 
-| Owner | Paths | Branch | First milestone |
-| --- | --- | --- | --- |
-| UI/macOS teammate | `macos/`, `scripts/build-macos.sh` | `feature/macos-ui` | Verify capture in Cursor, polish overlay and permission onboarding |
-| Backend/intelligence teammate | `api/`, `scripts/`, `.env.example` | `feature/backend-intelligence` | Extend the relevance evaluation; add content-aware reranking |
-| Both | `contracts/`, shared README, CI | Agree before editing | Keep request/response compatible |
-
-```sh
-git fetch origin
-git switch feature/macos-ui                # UI owner
-# OR
-git switch feature/backend-intelligence   # API owner
-```
-
-Both branches start from the same scaffold. Open small PRs to `main`; pull main into your branch after a teammate merges. The UI owner can use Demo mode without waiting for the API owner. See [CONTRIBUTING.md](CONTRIBUTING.md) for the handoff and contract-change checklist.
 
 ## Repository map
 
