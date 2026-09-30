@@ -22,7 +22,8 @@ struct HelpfulView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Preflight", systemImage: "sparkle").font(.headline)
+                MiracleMark(size: 18).foregroundStyle(.tint)
+                Text("Miracle").font(.headline)
                 Spacer()
                 if model.demoMode { Text("Demo").font(.caption).foregroundStyle(.secondary) }
                 Button(action: dismiss) { Image(systemName: "xmark") }

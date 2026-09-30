@@ -13,14 +13,14 @@ struct OverlayView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 10) {
-                Image(systemName: "sparkle").font(.title2).foregroundStyle(.tint)
-                Text("Preflight").font(.title2.weight(.semibold))
+                MiracleMark().foregroundStyle(.tint)
+                Text("Miracle").font(.title2.weight(.semibold))
                 if model.demoMode { Text("Demo").font(.caption).foregroundStyle(.secondary) }
                 Spacer()
                 Button { showingLibrary = true } label: { Image(systemName: "books.vertical") }
                     .accessibilityLabel("Skill library")
                 Button(action: openSettings) { Image(systemName: "gearshape") }.accessibilityLabel("Settings")
-                Button(action: close) { Image(systemName: "xmark") }.accessibilityLabel("Close Preflight")
+                Button(action: close) { Image(systemName: "xmark") }.accessibilityLabel("Close Miracle")
                     .keyboardShortcut(.cancelAction)
             }.buttonStyle(.borderless)
             HStack {

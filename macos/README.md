@@ -1,6 +1,6 @@
-# macOS app
+# Miracle for macOS
 
-Preflight lives in the menu bar. Left-click opens the prompt review popover; right-click opens its menu. Launching or reopening an already configured app does not open a separate review window. The global review shortcut is no longer registered. First launch alone presents onboarding.
+Miracle lives in the menu bar. Left-click opens the prompt review popover; right-click opens its menu. Launching or reopening an already configured app does not open a separate review window. The global review shortcut is no longer registered. First launch alone presents onboarding.
 
 ## Presentation and settings
 
@@ -17,14 +17,14 @@ The review shows only a single line from the beginning of the captured prompt, t
 
 The captured application's bundle identifier automatically selects Cursor or Codex for recommendations and installation. Unsupported applications do not inherit the previous host's installation target. Claude integration is owned by the parallel lane.
 
-The macOS client maps the API's existing `fast`, `balanced` and `capable` profiles onto available models. It does not change the shared API contract or send extra prompt data. This is a recommendation selection, not automation of another application's model picker.
+The macOS client maps the API's existing `fast`, `balanced` and `capable` profiles onto available models. It does not change the shared API contract or send extra prompt data. Model and effort are read-only recommendations. Users change them in their AI application; Miracle exposes no model or effort picker.
 
 - Cursor models come from a small documented catalog checked on 2026-09-30. Users enable the models available to their account in Settings. Only Grok 4.6 is enabled initially, matching the local account observed during verification. Grok models expose low, medium, high and xhigh when Custom effort is available; otherwise the account uses fixed medium. Models without verified configurable effort have no effort control.
 - Codex models are read from `$CODEX_HOME/models_cache.json` or `~/.codex/models_cache.json`. Only listed models and their declared reasoning levels are used. Hidden models are excluded. A missing catalog produces an empty state rather than invented options.
 
 Model selection is heuristic and bounded by the configured catalog. Refresh the Cursor catalog when host capabilities change. Do not infer account access from public model availability.
 
-Supported effort levels appear as a segmented control, with each option directly visible. A model with a fixed effort shows its value as text.
+The recommended supported effort appears as plain text. There are no dropdowns, segments, selection states or disabled input controls in the recommendation card.
 
 Sources: [Cursor models](https://cursor.com/docs/models), [Grok 4.6 effort](https://cursor.com/docs/models/grok-4-6), [Grok 4.7 effort](https://cursor.com/docs/models/grok-4-7), [Composer 2.5](https://cursor.com/docs/models/cursor-composer-2-5). Codex's installed model cache is the source for the local account.
 
@@ -42,7 +42,7 @@ The install state distinguishes progress, success and retryable failure. Library
 
 The shared live monitor follows accessible text fields. Recognized Cursor and Codex prompt labels trigger analysis after the typing pause; search, code editor and secure fields are excluded from automatic analysis. An unrecognized host field can be reanalyzed from the preview's refresh action. Live capture starts on, with no visible toggle; the obsolete saved-off preference is cleared during initialization. Settings and demo mode suspend external text reads. Prompt text remains in memory.
 
-Build with `npm run macos:build` after quitting Preflight. The build reuses an Apple Development signing identity, installs at `~/Applications/Preflight.app`, and links `build/Preflight.app` there. Accessibility may need a one-time refresh when migrating from an ad-hoc build. `--diagnostics` logs capture state only.
+Build with `npm run macos:build` after quitting Miracle (or its previous Preflight build). The build reuses an Apple Development signing identity, installs at `~/Applications/Miracle.app`, and links `build/Miracle.app` there. The previous default Preflight installation is migrated only after the new bundle has been signed and verified. `build/Preflight.app` remains a compatibility symlink. The bundle identifier and internal Swift module stay unchanged to retain preferences and signing identity; the visible app and executable are named Miracle. `MIRACLE_APP_PATH` and `MIRACLE_CODESIGN_IDENTITY` accept custom values, with the previous `PREFLIGHT_` variables retained as aliases. Accessibility may need a one-time refresh when migrating from an ad-hoc build. `--diagnostics` logs capture state only.
 
 ## Verification
 
@@ -58,4 +58,10 @@ Local verification on 2026-09-30: 58 backend tests and 48 regular Swift tests pa
 
 Automated coverage includes automatic Cursor/Codex target changes, migration of the old Live preference, selected-only installation, retries, existing-package preservation and partial failure. Previous signed-build UI checks covered the separate Settings window, readable mode information, model and effort options, and individual installation actions. Codex UI automation is unavailable in this environment, so its live prompt-label detection still needs acceptance testing in the host app.
 
-Manual checks for each new build: menu-bar-only opening; dedicated settings versus first-run onboarding; exactly two mode options; read-only prompt preview; automatic host detection; model and effort controls; selected and individual installation; no focus theft while Helpful appears. Physical secondary displays and VoiceOver still require separate acceptance testing.
+The Miracle build was launched after migrating the default Preflight installation. Its renamed review and Settings window, new monogram and preserved Accessibility permission were checked in the running app. Bundle metadata, icon packaging, demo resource, both build symlinks and retained onboarding preference were verified. Model and effort controls have been replaced with text in the shared recommendation view used by both presentation modes.
+
+Manual checks for each new build: menu-bar-only opening; dedicated settings versus first-run onboarding; exactly two mode options; read-only prompt preview; automatic host detection; read-only model and effort advice; selected and individual installation; no focus theft while Helpful appears. Physical secondary displays and VoiceOver still require separate acceptance testing.
+
+## Brand artwork
+
+Miracle uses a custom rounded m monogram. `Sources/Preflight/MiracleArtwork.swift` defines the shared vector geometry for the monochrome menu-bar template and interface mark. `Branding/main.swift` renders the same shape in white on a blue app-icon tile; the build produces the complete `.icns` size set. No external image service or font is required.

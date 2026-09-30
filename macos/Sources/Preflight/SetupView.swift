@@ -9,9 +9,9 @@ struct SetupView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             HStack(spacing: 12) {
-                Image(systemName: "sparkle").font(.largeTitle).foregroundStyle(.tint)
+                MiracleMark(size: 38).foregroundStyle(.tint)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Welcome to Preflight")
+                    Text("Welcome to Miracle")
                         .font(.title2.bold())
                 }
             }
@@ -57,7 +57,7 @@ struct SetupView: View {
             Divider()
             HStack {
                 Spacer()
-                Button("Start using Preflight", action: complete)
+                Button("Start using Miracle", action: complete)
                     .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
             }
         }
@@ -75,12 +75,12 @@ private struct ModePreview: View {
                 Circle().fill(.tertiary).frame(width: 5, height: 5)
                 Circle().fill(.tertiary).frame(width: 5, height: 5)
                 Spacer()
-                Image(systemName: "sparkle").font(.caption)
+                MiracleMark(size: 14)
                 Circle().fill(mode == .stealth ? Color.accentColor : Color.clear).frame(width: 5, height: 5)
             }.padding(10).background(.quaternary.opacity(0.4))
             Spacer(minLength: 8)
             if mode == .helpful {
-                Label("Model + effort", systemImage: "sparkles")
+                Label("Model + effort", systemImage: "bubble.left")
                     .font(.caption).padding(9).frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
                     .padding(.horizontal, 12)

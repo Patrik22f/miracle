@@ -90,7 +90,7 @@ final class AppModel {
         captureStatus = reading.status
         switch reading {
         case .captured(let captured): applyCapture(captured)
-        case .status(.reviewing): break // Keep the prompt while reviewing it in Preflight.
+        case .status(.reviewing): break // Keep the prompt while reviewing it in Miracle.
         case .status: receive(nil)
         }
         presentationChanged()

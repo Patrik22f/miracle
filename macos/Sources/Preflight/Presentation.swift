@@ -5,7 +5,7 @@ enum DisplayMode: String, CaseIterable, Identifiable {
     case stealth, helpful
     var id: String { rawValue }
     var title: String { rawValue.capitalized }
-    var symbol: String { self == .stealth ? "moon" : "sparkles" }
+    var symbol: String { self == .stealth ? "moon" : "bubble.left" }
     var summary: String {
         self == .stealth
             ? "A quiet signal in your menu bar. Open it when you’re ready."

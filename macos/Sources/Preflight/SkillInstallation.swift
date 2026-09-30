@@ -160,7 +160,7 @@ actor SkillInstaller {
         }
         var request = URLRequest(url: url)
         request.timeoutInterval = 20
-        request.setValue("Preflight", forHTTPHeaderField: "User-Agent")
+        request.setValue("Miracle", forHTTPHeaderField: "User-Agent")
         let (bytes, response) = try await URLSession.shared.bytes(for: request)
         if let http = response as? HTTPURLResponse,
            http.statusCode == 429 || (http.statusCode == 403 && http.value(forHTTPHeaderField: "X-RateLimit-Remaining") == "0") {

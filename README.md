@@ -1,8 +1,8 @@
-# Preflight
+# Miracle
 
-**The right Agent Skills, before you send.**
+**Model, effort and skills for your next prompt.**
 
-A native macOS prompt companion: type in a supported app and see the focused field appear automatically in **Your prompt**. Choose **Analyze prompt** to review installed and public skill recommendations. Skills are the product; model and effort are secondary advice.
+A native macOS prompt companion: write in your AI app and open Miracle from the menu bar to see model, effort and skill recommendations. The prompt preview is a single read-only line. Model and effort are advice; change them in your AI application. Install selected skills together or individually.
 
 ## Start in two minutes
 
@@ -18,34 +18,24 @@ In a second terminal, from the same repo:
 
 ```sh
 npm run macos:build
-open build/Preflight.app
+open build/Miracle.app
 ```
 
-The sparkle menu-bar item opens the overlay. Click **Enable Accessibility…**, allow **Preflight** in System Settings → Privacy & Security → Accessibility, and leave **Live capture** on. Focus an editable prompt field in another app and type: its full text follows into **Your prompt**, including edits and deletions. The panel stays visible while you work in the other app. Capture recovers after permission is granted without relaunching.
+The m-shaped menu-bar icon opens Miracle. Allow **Miracle** in System Settings → Privacy & Security → Accessibility, then focus the prompt in Cursor or Codex. Live capture starts enabled. The captured application determines the model catalog and installation destination automatically.
 
 On macOS versions that label this permission **Device Control and Data Access**, use that section under Privacy & Security. macOS may require Touch ID or your account password to approve it.
 
-With **Recommend automatically as I write** enabled, recognized Cursor prompts are analyzed after a 900 ms typing pause. Other captured fields wait for **Analyze prompt**; the shortcut also analyzes explicitly. Pausing automatic recommendations keeps text capture available. Editing or pasting inside Preflight pauses Live capture so your draft is protected; switch **Live capture** back on to resume. Setup and demo mode suspend capture. Preferences are saved, but prompt text is not. See [presentation modes](macos/README.md).
+With automatic recommendations enabled, recognized prompt labels trigger analysis after a 900 ms typing pause. The mode menu contains **Stealth** and **Helpful**; its information button explains the selected mode. **Settings** is a separate window, and onboarding appears only on first launch. See [the macOS interface and verification notes](macos/README.md).
 
-**⌥⌘Return** still captures and analyzes a one-time snapshot, preferring selected text. It pauses live capture to preserve your selected excerpt. If a host does not expose an editable Accessibility field, copy and paste into Preflight instead. See [capture architecture and the host verification checklist](docs/LIVE_CAPTURE.md).
+Open **Skill library** to browse or refresh imported skills. In recommendations, select skills with the checkboxes and use **Install selected skills**, or install an individual package from its row. Settings chooses installation for this Mac or an explicit project folder. The original prompt stays in the AI app; Miracle does not submit it or change the host's model. See [the import and matching criteria](docs/SKILL_MATCHING.md).
 
-Open **Skill library** to browse or refresh imported installed and public skills. Expand **Why this skill** to inspect the fit score. Matching checks purpose, platform/artifact, prerequisites, description evidence, and available instructions. It returns up to three complementary skills scoring at least 60/100. See [the import and matching criteria](docs/SKILL_MATCHING.md).
-
-Review the skills, select the ones you want, and click **Copy with skills**. Paste back into your AI app, review, and send. Closing the overlay leaves the original input untouched.
-
-For a UI-only demo, no backend is needed:
-
-```sh
-open build/Preflight.app --args --demo
-```
-
-Or choose **Try demo** from the menu bar. Demo mode always shows the clearly labeled sample response, regardless of the text. Turn Demo mode off for real analysis. The API can also work offline with `SKILLS_MODE=offline npm start`.
+For a UI-only demo, choose **Try demo** from the menu bar. Demo mode uses the bundled response and needs no backend. Turn Demo mode off for real analysis. The API can also work offline with `SKILLS_MODE=offline npm start`.
 
 ## What's working
 
-- Native SwiftUI review, Stealth menu-bar notifications, Helpful prompt-anchored recommendations, onboarding, and a dedicated registered global shortcut.
-- Automatic capture of supported focused editable text inputs, app provenance, persistent pause/resume, secure/read-only field exclusion, and paste fallback.
-- Background AX reads, bounded timeouts, serial sampling, permission recovery, stale-read rejection, and automatic pause for manual editing and demo mode.
+- Native SwiftUI review, Stealth menu-bar notifications, Helpful prompt-anchored recommendations, first-run onboarding and a dedicated Settings window.
+- Automatic capture of supported focused prompt inputs, app detection, secure/read-only field exclusion and a single-line prompt preview.
+- Background AX reads, bounded timeouts, serial sampling, permission recovery, stale-read rejection and capture suspension during setup, settings and demo mode.
 - `POST /analyze` with request validation, bounded input, timeouts, errors, and stable JSON shapes.
 - Public skills.sh search, normalization, deduplication, relevance ranking, up to three results, and a valid “no skill needed” result.
 - Installed and public `SKILL.md` imports, a searchable library, explicit provenance, and refresh warnings.
@@ -73,7 +63,7 @@ Both branches start from the same scaffold. Open small PRs to `main`; pull main 
 ## Repository map
 
 ```text
-macos/         Swift package: menu bar, hotkey, focused input, overlay, API client
+macos/         Swift package: menu bar, focused input, recommendations, settings, API client
 api/src/       HTTP server, task analysis, skills search and ranking, catalog
 api/test/      Offline behavior, upstream failure, API and contract tests
 api/eval/      Public-search and imported-skill prompt evaluation cases
@@ -110,15 +100,15 @@ Default `hybrid` mode combines imported skills and live discovery using explaina
 
 The importer fetches ten configured public `SKILL.md` sources; arbitrary live results remain metadata-only. The backend does not use an LLM reranker or perform security audits. All results say `not-audited`. Install counts are returned only when supplied by live search.
 
-This version follows the focused editable field through Accessibility and keeps a dedicated pre-send shortcut; it never intercepts another app's Enter key. It copies skill paths and links; it does **not** install skill dependencies, change the host model, or automatically send the prompt. AX support depends on the target app and focused control; rich web editors and terminal prompts may require paste. Cursor 3.22.12's Agents composer was verified on this Mac: successive unsent edits appeared automatically and clearing the composer cleared Preflight. The user also confirmed that an unsent prompt typed in Codex mirrors automatically. Other hosts require their own acceptance checks. “Any app” means an app exposing the supported Accessibility text semantics, not universal editor compatibility.
+Miracle follows accessible prompt fields without intercepting another application's Enter key. It can install skill packages; it does not execute their commands, install dependencies, change the host model or send the prompt. AX support depends on the host app and focused control. Cursor prompt capture was verified locally; Codex live prompt-label detection still needs acceptance testing in the host app. See [verification details](macos/README.md).
 
 ## Local data flow
 
-The API binds to `127.0.0.1` and rejects browser origins. Live capture reads the focused editable field in any accessible foreground app, not just AI apps. It skips Preflight itself, secure fields identified by Accessibility, and read-only controls. Captured text stays in memory. Analysis is explicit except for recognized Cursor prompts when automatic recommendations are enabled. Raw prompts go only from the native client to this local API during analysis. Only controlled topic labels (such as `react performance`) go to skills.sh. No prompt logging, telemetry, prompt persistence, or LLM provider calls. Imported skill snapshots persist only in the ignored local `.preflight/` directory. Clicking a skill link opens its local instructions or public source. Copy actions intentionally replace the clipboard. Do not expose this unauthenticated development API to a network.
+The API binds to `127.0.0.1` and rejects browser origins. Live capture reads the focused editable field in any accessible foreground app, not just AI apps. It skips Miracle itself, secure fields identified by Accessibility, and read-only controls. Captured text stays in memory. Analysis is explicit except for recognized Cursor and Codex prompts when automatic recommendations are enabled. Raw prompts go only from the native client to this local API during analysis. Only controlled topic labels (such as `react performance`) go to skills.sh. No prompt logging, telemetry, prompt persistence, or LLM provider calls. Imported skill snapshots persist only in the ignored local `.preflight/` directory. Clicking a skill link opens its local instructions or public source. Do not expose this unauthenticated development API to a network.
 
-Quit Preflight before rebuilding; the build script refuses to overwrite a running app. It automatically selects a single available Apple Development certificate and remembers that identity locally in `build/.signing-identity`. With multiple certificates, set `PREFLIGHT_CODESIGN_IDENTITY` to the desired name or SHA-1. Builds are signed in a temporary directory, then installed at `~/Applications/Preflight.app` and verified. The `build/Preflight.app` path is a symlink to that installation. Both signing and the runnable bundle stay outside iCloud storage, which can invalidate signatures by reattaching Finder metadata. Set `PREFLIGHT_APP_PATH` to another absolute, non-iCloud `.app` path if needed. This is development signing, not notarized distribution.
+Quit Miracle before rebuilding; the build also detects a running older Preflight executable. Builds reuse the locally selected Apple Development signing identity, generate the app icon, sign outside iCloud storage, and install at `~/Applications/Miracle.app`. The previous default Preflight installation migrates only after successful signing and verification. `build/Miracle.app` points to the installation; `build/Preflight.app` remains a compatibility shortcut.
 
-If migrating from an older ad-hoc build, remove its Preflight entry in System Settings, add `~/Applications/Preflight.app`, and enable it once. Subsequent builds use the same certificate identity so the permission can survive updates. Keep running the `.app` from the same path. `PREFLIGHT_CODESIGN_IDENTITY=-` explicitly requests a disposable ad-hoc build, whose permission must be renewed after code changes.
+Use `MIRACLE_APP_PATH` for another absolute app path and `MIRACLE_CODESIGN_IDENTITY` for an explicit certificate. The former `PREFLIGHT_` variables remain compatible. The bundle identifier, internal Swift module and local data directories keep their existing names to preserve settings and integration compatibility. This is development signing, not notarized distribution. See [build and permission notes](macos/README.md).
 
 ## GitHub / teammate access
 
