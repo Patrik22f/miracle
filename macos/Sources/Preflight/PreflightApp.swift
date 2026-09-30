@@ -127,8 +127,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         false
     }
 
-    private func showOnboarding() {
-        guard !settings.completedOnboarding else { return }
+    private func showOnboarding(force: Bool = false) {
+        guard force || !settings.completedOnboarding else { return }
         if let setupWindow { setupWindow.makeKeyAndOrderFront(nil); return }
         model.setCaptureSuspended(true)
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 610, height: 500), styleMask: [.titled, .closable], backing: .buffered, defer: false)
@@ -149,6 +149,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         window.makeKeyAndOrderFront(nil)
     }
 
+    private func repeatOnboarding() {
+        popover.performClose(nil)
+        helpfulPanel?.orderOut(nil)
+        settingsWindow?.close()
+        showOnboarding(force: true)
+    }
+
     @objc private func showSettings() {
         guard settings.completedOnboarding else { showOnboarding(); return }
         popover.performClose(nil)
@@ -161,7 +168,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         window.delegate = self
         window.contentView = NSHostingView(rootView: SettingsView(settings: settings, model: model, catalog: catalog,
             changed: { [weak self] in self?.settingsChanged() }, demo: { [weak self] in self?.demo() },
-            endDemo: { [weak self] in self?.endDemo() }))
+            endDemo: { [weak self] in self?.endDemo() },
+            showOnboarding: { [weak self] in self?.repeatOnboarding() }))
         settingsWindow = window
         window.center()
         NSApp.activate(ignoringOtherApps: true)
