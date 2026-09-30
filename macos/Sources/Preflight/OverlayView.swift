@@ -54,16 +54,47 @@ struct OverlayView: View {
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    if let result = model.result, let host = model.targetApp {
-                        ModelRecommendationView(result: result, host: host, settings: settings, catalog: catalog, demo: model.demoMode)
+                    if !model.demoMode {
+                        if !model.liveCaptureEnabled {
+                            DisclosureGroup("Review draft") {
+                                TextEditor(text: Binding(get: { model.prompt }, set: model.editPrompt))
+                                    .font(.body).frame(height: 90)
+                                    .accessibilityLabel("Draft prompt")
+                                HStack {
+                                    Button("Copy draft") { model.copy(includeSkills: false) }
+                                    Button("Resume live capture") { model.setLiveCaptureEnabled(true) }
+                                }.controlSize(.small)
+                            }
+                        }
+                        DisclosureGroup(model.contextLabel) {
+                            TextEditor(text: Binding(get: { model.contextText }, set: model.editContext))
+                                .font(.body).frame(height: 90)
+                                .accessibilityLabel("Chat context")
+                            if model.context != nil {
+                                Button("Clear context") { model.editContext("") }.controlSize(.small)
+                            }
+                        }.font(.caption)
+                    }
+                    if !model.demoMode {
+                        PromptSuggestionsView(suggestions: model.suggestions, use: model.useSuggestion)
+                        Divider()
+                    }
+                    if let result = model.result {
+                        if let host = model.targetApp {
+                            ModelRecommendationView(result: result, host: host, settings: settings, catalog: catalog, demo: model.demoMode)
+                        }
+                        if !model.demoMode { Text(result.contextLabel).font(.caption).foregroundStyle(.secondary) }
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Text("Skills").font(.headline)
                                 Text("\(result.skills.count)").font(.caption).foregroundStyle(.secondary)
                                 Spacer()
+                                if let count = result.meta.importedCount {
+                                    Text("\(count) in library").font(.caption).foregroundStyle(.secondary)
+                                }
                                 Text(result.sourceLabel).font(.caption).foregroundStyle(.secondary)
                             }.padding(.bottom, 4)
-                            if result.skills.isEmpty { Text("No additional skills").font(.callout).foregroundStyle(.secondary) }
+                            if result.skills.isEmpty { Text(result.emptySkillsLabel).font(.callout).foregroundStyle(.secondary) }
                             ForEach(result.skills) { skill in
                                 RecommendedSkillRow(skill: skill, model: model, settings: settings, installer: installer, openSettings: openSettings)
                                 if skill.id != result.skills.last?.id { Divider() }
@@ -97,7 +128,7 @@ struct OverlayView: View {
     }
 
     private var promptPreview: String {
-        guard model.targetApp != nil, !model.prompt.isEmpty else { return "—" }
+        guard (model.targetApp != nil || !model.liveCaptureEnabled), !model.prompt.isEmpty else { return "—" }
         let beginning = model.prompt.prefix(240).split(whereSeparator: \.isWhitespace).joined(separator: " ")
         return beginning + (model.prompt.count > 240 ? "…" : "")
     }

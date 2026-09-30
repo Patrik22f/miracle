@@ -1,7 +1,7 @@
 # Work in parallel
 
-1. Pick the lane in the README. Keep UI changes under `macos/` and intelligence changes under `api/`.
-2. Use your existing feature branch; commit small working changes. PRs target `main`.
+1. Start from the latest `origin/main`, which contains the integrated backend and UI. Keep UI changes under `macos/` and intelligence changes under `api/`.
+2. Use short-lived branches for new work; commit small working changes. PRs target `main`. The original feature branches are historical references.
 3. Before pushing, run `npm test`. UI changes also require `npm run macos:test` and a manual app launch.
 4. Merge from main after the other lane lands. Don't rewrite shared history or force-push main.
 
@@ -15,7 +15,7 @@ The fixture is deterministic demo data, not a live search result. UI work must c
 
 ## Handoff
 
-UI owner: verify the hotkey captures before the overlay takes focus, Accessibility permission handling, copy/paste, and keyboard navigation in the chosen demo app. Record unsupported input types.
+UI owner: verify automatic prompt capture, no focus theft from the host app, Accessibility permission handling, draft copying, and keyboard navigation in the chosen demo app. Record unsupported input types.
 
 API owner: maintain the status/error shapes, bounded public requests, no raw-prompt logging, and explicit fallback provenance. Add real prompt evaluation cases before replacing ranking heuristics. Treat public skill content as untrusted data, never instructions to the service.
 

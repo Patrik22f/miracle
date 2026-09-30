@@ -1,6 +1,8 @@
 # Live prompt capture
 
-With Accessibility permission and Live capture enabled, Preflight follows the focused editable text field in the foreground application. The overlay stays visible without taking focus on each update. Text is held in memory. Recognized Cursor prompts can trigger analysis after a 900 ms typing pause when automatic recommendations are enabled. Other fields wait for Analyze prompt or the explicit shortcut.
+Current UI: open the review from the menu bar; there is no registered global capture shortcut or separate review window. The capture/selection methods and their historical verification below remain implementation history. Recognized Cursor and Codex prompts now use a 300 ms analysis debounce, and chat context travels with each capture as described in [CHAT_CONTEXT.md](CHAT_CONTEXT.md).
+
+With Accessibility permission and Live capture enabled, Preflight follows the focused editable text field in the foreground application. The overlay stays visible without taking focus on each update. Text is held in memory. Recognized Cursor and Codex prompts can trigger analysis after a 300 ms typing pause when automatic recommendations are enabled. Pasted prompts and manual prompt/context edits in Preflight also trigger automatic analysis. Other captured fields wait for Analyze until edited in the review.
 
 ## Components and ownership
 
@@ -10,7 +12,7 @@ With Accessibility permission and Live capture enabled, Preflight follows the fo
 | `FocusedTextReader` actor | Synchronous cross-process AX reads, field eligibility, secure-field checks, selection handling and size limits. No UI or network calls. |
 | `LivePromptMonitor` on MainActor | Foreground-app selection, trust checks, serial polling, deduplication, lifecycle/cancellation and stale-read rejection. Dependencies can be replaced in tests. |
 | `AppModel` on MainActor | Prompt provenance, live/manual/demo transitions and analysis revision checks. Recognized Cursor snapshots can schedule debounced analysis; generic captured fields only change local state. |
-| `LiveCaptureView` | Visible capture state, source attribution, permission action and pause/resume. |
+| `OverlayView` | Visible capture state, source attribution, permission action and pause/resume. |
 
 Swift 6 checks isolation boundaries. Only Sendable values cross from the reader actor to the UI; AX objects remain inside the reader. The existing API contract is unchanged.
 

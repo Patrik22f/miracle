@@ -6,7 +6,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [.executable(name: "Miracle", targets: ["Preflight"])],
     targets: [
-        .executableTarget(name: "Preflight", resources: [.copy("Resources/demo-response.json"), .copy("Resources/Demo")]),
+        .executableTarget(name: "Preflight", resources: [.copy("Resources/demo-response.json"), .copy("Resources/Demo")], linkerSettings: [.linkedLibrary("sqlite3")]),
         .testTarget(name: "PreflightTests", dependencies: ["Preflight"])
     ]
 )

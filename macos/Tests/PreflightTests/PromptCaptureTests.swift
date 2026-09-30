@@ -113,7 +113,7 @@ struct LivePromptStateTests {
     func staleAnalysis() async throws {
         let response = try AnalyzeResponse.demo()
         let deferred = DeferredValue<AnalyzeResponse>()
-        let model = AppModel(analyzePrompt: { _, _ in await deferred.request() })
+        let model = AppModel(analyzePrompt: { _, _, _ in await deferred.request() })
         model.receiveCapture(.captured(CapturedPrompt(text: "Original", source: .fixture)))
         let analysis = try #require(model.analyze())
         await deferred.waitUntilRequested()

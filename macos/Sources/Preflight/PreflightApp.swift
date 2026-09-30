@@ -179,6 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     }
 
     private func refreshPresentation() {
+        if catalog.needsRefresh { Task { await catalog.refresh() } }
         settings.monitoringStatus = model.captureStatus.description
         if model.hasUnreadRecommendation && popover.isShown {
             model.markRead()
@@ -191,7 +192,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         statusItem?.button?.setAccessibilityLabel("Miracle, \(settings.mode.title), \(state)")
         guard settings.mode == .helpful, !model.helpfulDismissed, !popover.isShown,
               settingsWindow?.isVisible != true, setupWindow?.isVisible != true,
-              model.result != nil || model.hasError,
+              model.result != nil || model.hasError || model.suggestions.response?.status == "ready",
               let snapshot = model.activeSnapshot,
               NSWorkspace.shared.frontmostApplication?.processIdentifier == snapshot.processID,
               let bounds = snapshot.bounds, let primary = NSScreen.screens.first else {
@@ -213,10 +214,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             window.backgroundColor = .clear
             window.hasShadow = true
             window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
-            window.contentView = NSHostingView(rootView: HelpfulView(model: model, settings: settings, catalog: catalog, installer: installer, dismiss: { [weak self] in self?.model.dismissHelpful() }))
+            window.contentView = NSHostingView(rootView: HelpfulView(model: model, settings: settings, catalog: catalog, installer: installer, dismiss: { [weak self] in self?.model.dismissHelpful() }, review: { [weak self] in self?.showReview() }))
             helpfulPanel = window
         }
-        let height = model.hasError ? 180.0 : min(440, 230 + Double(model.result?.skills.count ?? 0) * 64)
+        let height = model.hasError ? 180.0 : min(560, 300 + Double(model.result?.skills.count ?? 0) * 64 + (model.suggestions.response?.status == "ready" ? 240 : 0))
         helpfulPanel?.setFrame(PanelPlacement.frame(above: anchor, size: CGSize(width: 420, height: height), visibleFrame: screen.visibleFrame.insetBy(dx: 8, dy: 8)), display: true)
         // orderFront leaves the host's prompt as the key input. Never activate here.
         helpfulPanel?.orderFrontRegardless()

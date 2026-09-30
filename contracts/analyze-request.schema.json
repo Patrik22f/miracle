@@ -20,7 +20,98 @@
     "maxSkills": {
       "type": "integer",
       "minimum": 0,
-      "maximum": 3
+      "maximum": 8
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "conversationId",
+        "source",
+        "messages"
+      ],
+      "properties": {
+        "conversationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "source": {
+          "enum": [
+            "manual",
+            "accessibility",
+            "claude-transcript"
+          ]
+        },
+        "messages": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "role",
+              "content"
+            ],
+            "properties": {
+              "role": {
+                "enum": [
+                  "user",
+                  "assistant",
+                  "context"
+                ]
+              },
+              "content": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8000
+              }
+            }
+          }
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      }
+    },
+    "filters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "q": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        },
+        "provenance": {
+          "enum": [
+            "installed",
+            "public-import",
+            "skills.sh",
+            "catalog"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        }
+      }
     }
   }
 }

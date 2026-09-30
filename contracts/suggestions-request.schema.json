@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Zázrak next-task suggestion request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "projectPath"
+  ],
+  "properties": {
+    "projectPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^/"
+    },
+    "prompt": {
+      "type": "string",
+      "maxLength": 12000
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "conversationId",
+        "source",
+        "messages"
+      ],
+      "properties": {
+        "conversationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "source": {
+          "enum": [
+            "manual",
+            "accessibility",
+            "claude-transcript"
+          ]
+        },
+        "messages": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "role",
+              "content"
+            ],
+            "properties": {
+              "role": {
+                "enum": [
+                  "user",
+                  "assistant",
+                  "context"
+                ]
+              },
+              "content": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8000
+              }
+            }
+          }
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

@@ -9,9 +9,15 @@ func decodesSharedContract() throws {
     let response = try JSONDecoder().decode(AnalyzeResponse.self, from: data)
     #expect(response.schemaVersion == "1.0")
     #expect(response.skills.first?.name == "vercel-react-best-practices")
-    #expect(response.meta.source == "catalog")
+    #expect(response.meta.source == "library")
     #expect(response.skills.first?.installs == nil)
-    #expect(response.skills.first?.evaluation?.score == 80)
+    #expect(response.skills.first?.evaluation?.criteria.count == 12)
+    #expect(response.skills.first?.evaluation?.threshold == 70)
+    #expect(response.skills.first?.knowledge?.version == "knowledge-v1")
+    #expect(response.skills.first?.knowledge?.hash.count == 64)
+    #expect(response.skills.first?.knowledge?.evidenceLines.isEmpty == false)
+    #expect(response.meta.bestSkillId == response.skills.first?.id)
+    #expect(response.bestSkill?.id == response.skills.first?.id)
 }
 
 @Test("Older responses without evaluation fields remain compatible")
@@ -20,9 +26,15 @@ func decodesLegacyContract() throws {
     var payload = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(response)) as? [String: Any])
     var skills = try #require(payload["skills"] as? [[String: Any]])
     skills[0].removeValue(forKey: "evaluation")
+    skills[0].removeValue(forKey: "knowledge")
     payload["skills"] = skills
+    var metadata = try #require(payload["meta"] as? [String: Any])
+    metadata.removeValue(forKey: "bestSkillId")
+    payload["meta"] = metadata
     let decoded = try JSONDecoder().decode(AnalyzeResponse.self, from: JSONSerialization.data(withJSONObject: payload))
     #expect(decoded.skills.first?.evaluation == nil)
+    #expect(decoded.skills.first?.knowledge == nil)
+    #expect(decoded.bestSkill?.id == decoded.skills.first?.id)
 }
 
 @MainActor @Test("Copied suggestions preserve original prompt and use local skill paths")
@@ -42,7 +54,11 @@ func copiesInstalledSkillPath() throws {
     #expect(copied.hasPrefix("Fix Swift actor isolation."))
     #expect(copied.contains("swift-concurrency: /example/skills/swift-concurrency/SKILL.md"))
     #expect(!copied.contains("file://"))
+    #expect(copied.contains("(best match from the skill library)"))
+    #expect(copied.contains("Mention the best match by name and source"))
     #expect(model.promptWithSkills(includeSkills: false) == "Fix Swift actor isolation.")
+    model.selected.remove(try #require(model.result?.bestSkill?.id))
+    #expect(!model.promptWithSkills(includeSkills: true).contains("best match"))
 }
 
 @Test("Optional app is omitted rather than encoded as null")
@@ -52,7 +68,7 @@ func requestOmitsApp() throws {
     let payload = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
     #expect(payload["prompt"] as? String == "Say hello")
     #expect(payload["app"] == nil)
-    #expect(payload["maxSkills"] as? Int == 3)
+    #expect(payload["maxSkills"] as? Int == 6)
 }
 
 @Test("The bundled demo fixture is available offline")

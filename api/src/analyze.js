@@ -3,6 +3,9 @@ import { catalog } from './catalog.js';
 import { signals, capabilities, domains, compatible, label } from './signals.js';
 import { promptCriteria, recommendSkills } from './criteria.js';
 import { readLibrary } from './skill-library.js';
+import { recommendKnowledge } from './skill-knowledge.js';
+import { resolveTask } from './task-context.js';
+import { matchesSkillFilters } from './skill-filters.js';
 
 export function classify(prompt) {
   const tags = signals(prompt, { task: true });
@@ -89,8 +92,31 @@ export function rank(candidates, analysis, maxSkills = 3) {
 }
 
 export async function analyze(request, options = {}) {
+  const result = await analyzeResult(request, options);
+  // The best eligible match is always the first ranked result, including ties.
+  // Null is deliberate when no skill qualifies or the user requests zero skills.
+  result.meta.bestSkillId = result.skills[0]?.id ?? null;
+  return result;
+}
+
+async function analyzeResult(request, options) {
   const start = performance.now();
-  const analysis = classify(request.prompt);
+  const plan = resolveTask(request.prompt, request.context);
+  const analysis = classify(plan.effectivePrompt);
+  analysis.effort = plan.effort.level;
+  if (options.mode === 'knowledge') {
+    const library = options.library ?? await readLibrary();
+    const skills = recommendKnowledge(library, request.prompt, { maxSkills: request.maxSkills ?? 3, app: request.app, resolved: plan, filters: request.filters });
+    return {
+      schemaVersion: '1.0', requestId: randomUUID(),
+      analysis: { intent: analysis.intent, tags: [...new Set([...plan.task.scopes, ...plan.task.purposes])], queries: [], context: plan.context },
+      effort: plan.effort,
+      model: { profile: analysis.effort === 'high' ? 'capable' : analysis.effort === 'low' ? 'fast' : 'balanced', reason: 'Choose an available model in your AI app.' },
+      skills,
+      meta: { source: 'library', ranking: 'knowledge-v1', importedCount: library.skills.length,
+        durationMs: Math.round(performance.now() - start), warnings: library.warnings ?? [] },
+    };
+  }
   if (['hybrid', 'installed'].includes(options.mode)) {
     const library = options.library ?? await readLibrary();
     const task = promptCriteria(request.prompt);
@@ -99,7 +125,7 @@ export async function analyze(request, options = {}) {
       ? await discover(queries, { ...options, mode: 'live' }) : { candidates: [], source: 'none', warnings: [] };
     const imported = options.mode === 'installed' ? library.skills.filter(skill => skill.provenance === 'installed') : library.skills;
     const candidates = [...imported, ...discovery.candidates.filter(skill => !imported.some(local => local.id === skill.id))];
-    const skills = recommendSkills(candidates, request.prompt, request.maxSkills ?? 3);
+    const skills = recommendSkills(candidates.filter(skill => matchesSkillFilters(skill, request.filters)), request.prompt, request.maxSkills ?? 3);
     return {
       schemaVersion: '1.0', requestId: randomUUID(),
       analysis: { intent: analysis.intent, tags: [...new Set([...task.scopes, ...task.purposes])], queries: options.mode === 'hybrid' ? queries : [] },
@@ -116,7 +142,7 @@ export async function analyze(request, options = {}) {
     analysis: { intent: analysis.intent, tags: analysis.tags, queries: analysis.queries },
     effort: { level: analysis.effort, reason: analysis.effort === 'high' ? 'The prompt suggests cross-cutting or complex work.' : analysis.effort === 'medium' ? 'This task benefits from investigation and verification.' : 'A short, direct response should be enough.' },
     model: { profile: analysis.effort === 'high' ? 'capable' : analysis.effort === 'low' ? 'fast' : 'balanced', reason: 'Advisory capability profile; choose an available model in your AI app.' },
-    skills: rank(discovery.candidates, analysis, request.maxSkills ?? 3),
+    skills: rank(discovery.candidates.filter(skill => matchesSkillFilters(skill, request.filters)), analysis, request.maxSkills ?? 3),
     meta: { source: discovery.source, ranking: 'heuristic-v1', durationMs: Math.round(performance.now() - start), warnings: discovery.warnings },
   };
 }

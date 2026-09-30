@@ -23,6 +23,7 @@ func settingsPersist() throws {
 func promptPolicy() {
     let cursor = "com.todesktop.230313mzl4w4u92"
     #expect(PromptPolicy.accepts(bundleID: cursor, role: kAXTextAreaRole, subrole: "", label: "Chat input"))
+    #expect(PromptPolicy.accepts(bundleID: "com.openai.codex", role: kAXTextAreaRole, subrole: "", label: "Message Codex"))
     #expect(!PromptPolicy.accepts(bundleID: cursor, role: kAXTextAreaRole, subrole: "", label: "Editor content"))
     #expect(!PromptPolicy.accepts(bundleID: cursor, role: kAXTextAreaRole, subrole: "", label: "task.swift"))
     #expect(!PromptPolicy.accepts(bundleID: cursor, role: kAXTextAreaRole, subrole: "", label: "Code editor prompt.swift"))
@@ -50,7 +51,7 @@ func placement() {
 @MainActor @Test("Rapid edits send only the settled prompt, and unchanged polls do not repeat it")
 func debounce() async throws {
     let recorder = AnalysisRecorder()
-    let model = AppModel { text, _ in try await recorder.analyze(text) }
+    let model = AppModel { text, _, _ in try await recorder.analyze(text) }
     let field = UUID()
     model.receive(snapshot("First prompt", field: field))
     let previous = model.task
@@ -70,7 +71,7 @@ func debounce() async throws {
 @MainActor @Test("Leaving the prompt clears pending analysis and stale recommendations")
 func focusLoss() async {
     let recorder = AnalysisRecorder()
-    let model = AppModel { text, _ in try await recorder.analyze(text) }
+    let model = AppModel { text, _, _ in try await recorder.analyze(text) }
     model.receive(snapshot("Pending prompt"))
     let pending = model.task
     model.receive(nil)
@@ -84,7 +85,7 @@ func focusLoss() async {
 
 @MainActor @Test("Dismissal lasts for one prompt and new text clears results immediately")
 func dismissal() async throws {
-    let model = AppModel { _, _ in try .demo() }
+    let model = AppModel { _, _, _ in try .demo() }
     let field = UUID()
     model.receive(snapshot("Original", field: field))
     await model.task?.value
@@ -102,7 +103,7 @@ func dismissal() async throws {
 @MainActor @Test("A late network response cannot restore a result after a prompt edit")
 func staleResponse() async throws {
     let gate = AnalysisGate()
-    let model = AppModel { _, _ in await gate.response() }
+    let model = AppModel { _, _, _ in await gate.response() }
     model.editPrompt("Before edit")
     model.analyze()
     let pending = model.task
@@ -113,7 +114,8 @@ func staleResponse() async throws {
     #expect(model.prompt == "After edit")
     #expect(model.result == nil)
     #expect(!model.hasUnreadRecommendation)
-    #expect(!model.isLoading)
+    #expect(model.isLoading) // The edited prompt is now scheduled automatically.
+    model.cancel()
 }
 
 private func snapshot(_ text: String, field: UUID = UUID(), x: CGFloat = 0) -> PromptSnapshot {
@@ -122,7 +124,7 @@ private func snapshot(_ text: String, field: UUID = UUID(), x: CGFloat = 0) -> P
 
 @MainActor @Test("Backend errors signal attention once and can be retried")
 func analysisError() async {
-    let model = AppModel { _, _ in throw ClientError.message("Offline") }
+    let model = AppModel { _, _, _ in throw ClientError.message("Offline") }
     let field = UUID()
     model.receive(snapshot("A prompt", field: field))
     await model.task?.value
@@ -142,7 +144,7 @@ func emptyRecommendation() async throws {
     let fixture = try AnalyzeResponse.demo()
     let empty = AnalyzeResponse(schemaVersion: fixture.schemaVersion, requestId: "empty", analysis: fixture.analysis,
                                 effort: fixture.effort, model: fixture.model, skills: [], meta: fixture.meta)
-    let model = AppModel { _, _ in empty }
+    let model = AppModel { _, _, _ in empty }
     model.editPrompt("Hello")
     model.analyze()
     await model.task?.value
@@ -155,7 +157,7 @@ func emptyRecommendation() async throws {
 @MainActor @Test("The same text in a different field starts a new prompt session")
 func differentField() async {
     let recorder = AnalysisRecorder()
-    let model = AppModel { text, _ in try await recorder.analyze(text) }
+    let model = AppModel { text, _, _ in try await recorder.analyze(text) }
     model.receive(snapshot("Same text"))
     await model.task?.value
     model.dismissHelpful()
@@ -189,4 +191,13 @@ private actor AnalysisGate {
         await withCheckedContinuation { started = $0 }
     }
     func finish(_ response: AnalyzeResponse) { pending?.resume(returning: response); pending = nil }
+}
+
+@Test("Composer labels can vary without requiring a specific English placeholder")
+func composerLabels() {
+    for label in ["Ask", "Message", "Describe your task", "Build anything", "What would you like to do?"] {
+        #expect(PromptPolicy.accepts(bundleID: "com.todesktop.230313mzl4w4u92", role: kAXTextAreaRole, subrole: "", label: label))
+    }
+    #expect(PromptPolicy.accepts(bundleID: "com.openai.codex", role: kAXTextAreaRole, subrole: "", label: ""))
+    #expect(!PromptPolicy.accepts(bundleID: "com.todesktop.230313mzl4w4u92", role: kAXTextAreaRole, subrole: "", label: ""))
 }

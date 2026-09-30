@@ -4,6 +4,7 @@ extension AnalyzeResponse {
     var sourceLabel: String {
         switch meta.source {
         case "demo": ""
+        case "library": "Studied library"
         case "hybrid": "Library + search"
         case "installed": "Installed"
         case "skills.sh": "Live search"
@@ -11,6 +12,19 @@ extension AnalyzeResponse {
         default: ""
         }
     }
+    var contextLabel: String {
+        switch analysis.context?.status {
+        case "used": analysis.context?.truncated == true ? "Using partial chat context" : "Using chat context"
+        case "missing": "Chat context needed"
+        case "not-needed": "Using the latest request"
+        default: "Chat context unavailable"
+        }
+    }
+
+    var emptySkillsLabel: String {
+        analysis.context?.status == "missing" ? "Add the earlier task to find relevant skills." : "No sufficiently supported skill match in this library."
+    }
+
 }
 
 struct HelpfulView: View {
@@ -19,6 +33,7 @@ struct HelpfulView: View {
     let catalog: ModelCatalog
     let installer: SkillInstallModel
     let dismiss: () -> Void
+    let review: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -29,16 +44,32 @@ struct HelpfulView: View {
                 Button(action: dismiss) { Image(systemName: "xmark") }
                     .buttonStyle(.plain).accessibilityLabel("Dismiss recommendation")
             }
-            if let result = model.result, let host = model.targetApp {
-                ModelRecommendationView(result: result, host: host, settings: settings, catalog: catalog, compact: true, demo: model.demoMode)
-                if !result.skills.isEmpty {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 4) {
+            if model.result != nil || model.suggestions.response?.status == "ready" {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if !model.demoMode, model.suggestions.response?.status == "ready" {
+                            PromptSuggestionsView(suggestions: model.suggestions, compact: true) { suggestion in
+                                model.useSuggestion(suggestion)
+                                review()
+                            }
+                        }
+                        if let result = model.result {
+                            if let host = model.targetApp {
+                                ModelRecommendationView(result: result, host: host, settings: settings, catalog: catalog, compact: true, demo: model.demoMode)
+                            }
+                            if !model.demoMode { Text(result.contextLabel).font(.caption).foregroundStyle(.secondary) }
+                            if result.skills.isEmpty {
+                                Text(result.emptySkillsLabel).font(.callout).foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            if result.analysis.context?.status == "missing" {
+                                Button("Add context", action: review).buttonStyle(.borderless)
+                            }
                             ForEach(result.skills) { skill in
                                 RecommendedSkillRow(skill: skill, model: model, settings: settings, installer: installer, compact: true)
                             }
                         }
-                    }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
                 }
             } else if let message = model.message {
                 Label(message, systemImage: "exclamationmark.circle").font(.callout).foregroundStyle(.red)

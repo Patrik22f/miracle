@@ -40,10 +40,10 @@ struct ModelRecommendationView: View {
     var demo = false
 
     private var models: [RecommendedModel] { demo ? catalog.models(for: host) : settings.availableModels(for: host, catalog: catalog) }
-    private var recommendation: RecommendedModel? { ModelRecommendation.choose(from: models, profile: result.model.profile) }
+    private var recommendation: RecommendedModel? { ModelRecommendation.choose(from: models, profile: result.model.profile, requestedEffort: result.effort.level) }
     private var efforts: [String] {
         guard let recommendation else { return [] }
-        if host == .cursor, !demo, !settings.cursorCustomEffort {
+        if host == .cursor, !demo, !(settings.detectCursorModels && catalog.cursorDetected), !settings.cursorCustomEffort {
             return recommendation.id.hasPrefix("grok-") ? ["medium"] : []
         }
         return recommendation.efforts
@@ -173,6 +173,10 @@ struct RecommendedSkillRow: View {
                 })) { Text(skill.name).font(.callout.weight(.medium)).lineLimit(2) }.toggleStyle(.checkbox)
                 Spacer(minLength: 8)
                 SkillInstallButton(skill: InstallableSkill(skill), host: model.targetApp, settings: settings, installer: installer, openSettings: openSettings, demoModel: model.demoMode ? model : nil)
+            }
+            if model.result?.bestSkill?.id == skill.id {
+                Label("Best match", systemImage: "star.fill")
+                    .font(.caption.weight(.semibold)).foregroundStyle(.tint)
             }
             if !compact {
                 Text(skill.reason).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)

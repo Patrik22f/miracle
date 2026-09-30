@@ -10,6 +10,7 @@ const scopeRules = [
   ['web', /\bweb\b|\bfrontend\b|\bhtml\b|\bcss\b|\blanding page\b/i],
   ['supabase', /\bsupabase\b/i], ['postgres', /\bpostgres(?:ql)?\b/i],
   ['database', /\bdatabase\b|\bsql\b/i], ['python', /\bpython\b|\bpytest\b/i],
+  ['grdb', /\bgrdb\b/i], ['sqlite', /\bsqlite\b/i],
   ['stripe', /\bstripe\b/i], ['clerk', /\bclerk\b/i],
   ['pdf', /\bpdf\b/i], ['documents', /\bdocx\b|\bword document\b/i],
   ['spreadsheets', /\bxlsx\b|\bspreadsheet\w*\b|\bexcel\b/i],
@@ -44,13 +45,18 @@ const purposeRules = [
   ['media', /\bcamera\b|\baudio\b|\bvideo\b|\bphotos?\b/i],
   ['graphics', /\bmetal\b|\bshaders?\b|\bgpu\b|\brealitykit\b/i],
   ['image-generation', /\bgenerate\w* (?:an? )?image\b|\bimagegen\b|\bimage generation\b/i],
-  ['skill-authoring', /\b(?:create|write|edit|design) (?:a |an |the )?(?:codex )?skill\b|\bskill creator\b/i],
+  ['focus', /\bfocus(?:engine|ed|able)?\b|\bkeyboard navigation\b/i],
+  ['background', /\bbackground (?:execution|tasks?|refresh|processing)\b|\bbgtaskscheduler\b/i],
+  ['location', /\blocation\b|\bmapkit\b|\bgeofenc\w*\b|\bgps\b/i],
+  ['observability', /\bobservability\b|\blogging\b|\boslog\b|\bsignposts?\b/i],
+  ['interface-copy', /\bmicrocopy\b|\bonboarding (?:text|copy)\b|\b(?:error|empty state|button|interface) (?:messages?|text|copy|labels?)\b/i],
+  ['skill-authoring', /\b(?:create|write|edit|design)\b[^.!?\n]{0,60}\bskill\b|\bskill creator\b/i],
   ['skill-installation', /\binstall\w* (?:a |the )?skills?\b|\bskill installer\b/i],
 ];
 const normalize = text => text.replace(/[-_]/g, ' ').toLowerCase();
 const detect = (text, rules) => rules.filter(([, pattern]) => pattern.test(normalize(text))).map(([id]) => id);
 const unique = xs => [...new Set(xs)];
-const stop = new Set('use when with this that from into your using about which their should any all for and the are but not only skill skills code app application help work task expert best practices guide guidance writes reviews improves implement implementing building create writing reviewing refactoring development swift swiftui apple ios macos react nextjs web'.split(' '));
+const stop = new Set('use when with this that from into your using about which their should any all for and the are but not only skill skills code app application help work task expert best practices guide guidance write read edit review build fix improve updates writes reviews improves implement implementing building create writing reviewing refactoring development swift swiftui apple ios macos react nextjs web'.split(' '));
 const tokens = text => unique(normalize(text).match(/[a-z][a-z0-9]{2,}/g) ?? []).filter(t => !stop.has(t));
 const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -114,12 +120,20 @@ const overrides = {
   'pptx': { scopes: ['presentations'], purposes: [] },
   'presentations': { scopes: ['presentations'], purposes: [] },
   'pdf': { scopes: ['pdf'], purposes: [] },
+  'imagegen': { scopes: [], purposes: ['image-generation'] },
+  'writing-for-interfaces': { scopes: [], purposes: ['interface-copy'] },
+  'background-execution': { scopes: ['apple'], purposes: ['background'] },
   'app-intents': { scopes: ['apple'], purposes: ['app-intents'] },
   'widgets': { scopes: ['apple'], purposes: ['widgets'] },
   'stripe-best-practices': { scopes: ['stripe'], purposes: ['payments', 'authentication', 'security', 'testing'] },
 };
 
 const prerequisites = {
+  'figma-to-swiftui': /\bfigma\b/i,
+  'axiom-test-simulator': /\bsimulator\b|\bui tests?\b|\bend to end\b/i,
+  'ios-code-audit': /\baudit\b|\breview\b|\binspect\b/i,
+  'axiom-ai': /\b(?:apple intelligence|on device ai|foundation models|languagemodelsession|generable|coreml|speechtranscriber|speech to text)\b/i,
+  'axiom-tools': /\baxiom\b|\bxclog\b|\bsymbolicat\w*\b/i,
   'excel-live-control': /\b(?:open|active|live|connected)\b[\s\S]{0,40}\b(?:excel|workbook|session)\b|\bexcel\b[\s\S]{0,40}\b(?:add in|open|active|live|connected)\b|@excel/i,
   'connect-recommend': /\bstripe connect\b|\bconnected accounts?\b|\bmarketplace\b|\bsellers?\b|\bvendors?\b|\bsplit payments?\b|\brevenue sharing\b/i,
   'connect-required-verification-information': /\bstripe connect\b|\bconnected accounts?\b|\bkyc\b|\bsellers?\b|\bmerchants?\b/i,
@@ -142,8 +156,7 @@ export function skillCriteria(skill) {
   return { scopes, purposes, tokens: tokens(`${skill.name} ${description}`), annotated: false };
 }
 
-export function evaluateSkill(skill, task) {
-  const profile = skillCriteria(skill);
+export function evaluateSkill(skill, task, profile = skillCriteria(skill)) {
   const named = new RegExp(`(?:^|[^a-z0-9-])\\$?${escape(skill.name)}(?:$|[^a-z0-9-])`, 'i');
   // A common format name such as PDF is not itself an invocation of the pdf skill.
   const invocation = new RegExp(`\\$${escape(skill.name)}(?:$|[^a-z0-9-])|\\b${escape(skill.name)}\\s+skill\\b|\\bskill\\s+${escape(skill.name)}\\b`, 'i');
@@ -154,18 +167,22 @@ export function evaluateSkill(skill, task) {
   const matchedScopes = profile.scopes.filter(s => task.scopes.includes(s));
   const matchedPurposes = profile.purposes.filter(s => task.purposes.includes(s));
   const matchedTokens = profile.tokens.filter(t => task.tokens.includes(t));
+  // Unclassified workflows still need concrete description evidence. This path
+  // never bypasses a platform, named provider, prerequisite, or specialty gate.
+  const lexical = !profile.purposes.length && matchedTokens.length >= 2;
   if (!explicit) {
     const prerequisite = prerequisites[skill.name.toLowerCase()];
-    if (prerequisite && !prerequisite.test(normalize(task.positive))) return rejected('The required workflow is absent from the prompt.');
+    if (prerequisite && !prerequisite.test(normalize(task.workflowText ?? task.positive))) return rejected('The required workflow is absent from the prompt.');
     if (profile.scopes.length && !matchedScopes.length) return rejected('Platform or artifact does not match.');
     // Named providers must match even when another scope (e.g. React) does.
     if (profile.scopes.some(s => ['stripe', 'clerk', 'supabase'].includes(s) && !task.scopes.includes(s))) return rejected('Required service is absent.');
     if (profile.purposes.length && !matchedPurposes.length) return rejected('The task does not need this specialty.');
-    if (!profile.purposes.length && task.purposes.length && !['pdf', 'documents', 'spreadsheets', 'presentations'].some(s => matchedScopes.includes(s))) return rejected('A broad skill does not establish a specialist match.');
-    if (!profile.scopes.length && !profile.annotated && (!skill.content || !matchedPurposes.length)) return rejected('Insufficient scope evidence.');
-    if (!matchedScopes.length && !matchedPurposes.length) return rejected('No task evidence.');
+    if (!profile.purposes.length && task.purposes.length && !lexical && !['pdf', 'documents', 'spreadsheets', 'presentations'].some(s => matchedScopes.includes(s))) return rejected('A broad skill does not establish a specialist match.');
+    if (!profile.scopes.length && !profile.annotated && (!skill.content || (!matchedPurposes.length && !lexical))) return rejected('Insufficient scope evidence.');
+    if (!matchedScopes.length && !matchedPurposes.length && !lexical) return rejected('No task evidence.');
     // General debugging/testing should still be about technical work.
-    if (!profile.scopes.length && !task.scopes.length && !/\b(?:code|function|test|software|compiler|stack trace|server|api)\b/i.test(task.positive)) return rejected('No technical task context.');
+    if (!lexical && !profile.scopes.length && !task.scopes.length && matchedPurposes.some(p => ['debugging', 'testing'].includes(p))
+      && !/\b(?:code|function|test|software|compiler|stack trace|server|api)\b/i.test(task.positive)) return rejected('No technical task context.');
   }
   const values = explicit ? [30, 25, 25, 10, 10] : [
     matchedPurposes.length ? 30 : 20,
@@ -178,10 +195,10 @@ export function evaluateSkill(skill, task) {
   const score = values.reduce((a, b) => a + b, 0);
   const contexts = task.scopes.filter(scope => !task.scopes.some(other => other !== scope && expandScopes([other]).includes(scope)));
   const applicable = contexts.filter(context => !profile.scopes.length || expandScopes([context]).some(scope => profile.scopes.includes(scope)));
-  const topics = matchedPurposes.length ? [...matchedPurposes] : ['general'];
+  const topics = matchedPurposes.length ? [...matchedPurposes] : lexical && !profile.scopes.length ? matchedTokens.map(t => `workflow-${t}`) : ['general'];
   if (matchedPurposes.some(p => p !== 'debugging') && task.purposes.includes('debugging')) topics.push('debugging');
   const coverage = topics.flatMap(topic => (applicable.length ? applicable : ['general']).map(context => `${context}:${topic}`));
-  const reason = explicit ? `You explicitly requested ${skill.name}.` : `Matches ${matchedPurposes.join(' and ') || 'the requested artifact or framework'}${matchedScopes.length ? ` for ${matchedScopes.join(' / ')}` : ''}.`;
+  const reason = explicit ? `You explicitly requested ${skill.name}.` : `Matches ${matchedPurposes.join(' and ') || (lexical ? matchedTokens.slice(0, 3).join(', ') : 'the requested artifact or framework')}${matchedScopes.length ? ` for ${matchedScopes.join(' / ')}` : ''}.`;
   return { skill, eligible: score >= 60, score, reason, evidence, coverage, explicit, matchedTokens };
 }
 

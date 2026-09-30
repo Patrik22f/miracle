@@ -3,8 +3,15 @@ import Observation
 
 @MainActor @Observable
 final class AppModel {
+    let suggestions: PromptSuggestionsModel
     private(set) var prompt = ""
     private(set) var source: PromptSource?
+    private(set) var context: ConversationContext?
+    var contextText: String { context?.text ?? "" }
+    var contextLabel: String {
+        guard let context else { return "Chat context unavailable · Add context" }
+        return context.source == "manual" ? "Added chat context" : "Visible chat context · Review"
+    }
     var sourceApp: String? { source?.name }
     var result: AnalyzeResponse?
     var selected: Set<String> = []
@@ -19,22 +26,27 @@ final class AppModel {
     var hasUnreadRecommendation = false
     var helpfulDismissed = false
     var hasError = false
-    var targetApp: HostApp? { HostApp.detect(source) }
+    var targetApp: HostApp? { HostApp.detect(source) ?? (manuallyEdited ? draftHost : nil) }
     @ObservationIgnored var presentationChanged: () -> Void = {}
     @ObservationIgnored var permissionChanged: (Bool) -> Void = { _ in }
     @ObservationIgnored private let monitor: LivePromptMonitor
-    @ObservationIgnored private let analyzePrompt: @Sendable (String, String?) async throws -> AnalyzeResponse
+    @ObservationIgnored private let analyzePrompt: @Sendable (String, String?, ConversationContext?) async throws -> AnalyzeResponse
     @ObservationIgnored private(set) var task: Task<Void, Never>?
     private var captureStarted = false
     private var captureSuspended = false
     private var lastFieldID: UUID?
     private var revision = UUID()
+    private var automaticTask = false
+    private var manuallyEdited = false
+    private var draftHost: HostApp?
+    private var lastSuggestionIDs: [String] = []
 
     init(monitor: LivePromptMonitor = LivePromptMonitor(), preferences: UserDefaults? = nil,
-         analyzePrompt: @escaping @Sendable (String, String?) async throws -> AnalyzeResponse = {
-             try await APIClient().analyze(prompt: $0, app: $1)
+         analyzePrompt: @escaping @Sendable (String, String?, ConversationContext?) async throws -> AnalyzeResponse = {
+             try await APIClient().analyze(prompt: $0, app: $1, context: $2)
          }) {
         self.monitor = monitor
+        self.suggestions = PromptSuggestionsModel(preferences: preferences)
         self.analyzePrompt = analyzePrompt
         self.liveCaptureEnabled = true
         preferences?.removeObject(forKey: "liveCaptureEnabled")
@@ -43,6 +55,15 @@ final class AppModel {
         monitor.isEnabled = { [weak self] in
             guard let self else { return false }
             return self.liveCaptureEnabled && !self.captureSuspended
+        }
+        suggestions.changed = { [weak self] in
+            guard let self else { return }
+            let ids = self.suggestions.response?.suggestions.map(\.id) ?? []
+            if !ids.isEmpty, ids != self.lastSuggestionIDs {
+                self.lastSuggestionIDs = ids
+                self.hasUnreadRecommendation = true
+            }
+            self.presentationChanged()
         }
     }
 
@@ -54,26 +75,31 @@ final class AppModel {
     func stopCapture() {
         captureStarted = false
         monitor.stop()
+        suggestions.setRunning(false)
     }
 
     func setLiveCaptureEnabled(_ enabled: Bool) {
         liveCaptureEnabled = enabled
-        if !enabled { endAutomaticSession() }
+        if enabled { manuallyEdited = false; draftHost = nil }
+        if !enabled { endAutomaticSession(); if automaticTask { invalidate() } }
         synchronizeCapture()
+        if enabled { scheduleAutomaticAnalysis() }
     }
 
     func setAutomaticRecommendationsEnabled(_ enabled: Bool) {
         guard automaticRecommendationsEnabled != enabled else { return }
         automaticRecommendationsEnabled = enabled
-        if !enabled { endAutomaticSession() }
+        if !enabled { endAutomaticSession(); if automaticTask { invalidate() } }
         synchronizeCapture()
+        if enabled { scheduleAutomaticAnalysis() }
     }
 
     func setCaptureSuspended(_ suspended: Bool) {
         guard captureSuspended != suspended else { return }
         captureSuspended = suspended
-        if suspended { endAutomaticSession() }
+        if suspended { endAutomaticSession(); if automaticTask { invalidate() } }
         synchronizeCapture()
+        if !suspended { scheduleAutomaticAnalysis() }
     }
 
     private func synchronizeCapture() {
@@ -83,6 +109,7 @@ final class AppModel {
         else if captureSuspended { captureStatus = .reviewing }
         else { captureStatus = AccessibilityPermission.isGranted ? .waiting : .permissionRequired }
         if captureStarted { monitor.start() }
+        suggestions.setRunning(captureStarted && automaticRecommendationsEnabled && !demoMode && !captureSuspended)
         presentationChanged()
     }
 
@@ -98,34 +125,57 @@ final class AppModel {
     }
 
     private func applyCapture(_ captured: CapturedPrompt) {
+        defer { updateSuggestions(detectedProjectPath: captured.projectPath) }
+        manuallyEdited = false
         if liveCaptureEnabled, automaticRecommendationsEnabled, let snapshot = captured.automaticSnapshot {
             receive(snapshot)
             return
         }
-        guard prompt != captured.text || source != captured.source || lastFieldID != captured.fieldID || activeSnapshot != nil else { return }
+        guard prompt != captured.text || source != captured.source || lastFieldID != captured.fieldID || context != captured.context || activeSnapshot != nil else { return }
         activeSnapshot = nil
         invalidate()
         prompt = captured.text
         source = captured.source
+        context = captured.context
         lastFieldID = captured.fieldID
     }
 
     func editPrompt(_ text: String) {
         guard text != prompt else { return }
-        // Internal draft updates must not be overwritten by an in-flight capture.
-        liveCaptureEnabled = false
-        endAutomaticSession()
-        synchronizeCapture()
+        pauseCaptureForEditing()
         invalidate()
         source = nil
         lastFieldID = nil
         prompt = text
+        scheduleAutomaticAnalysis()
+        updateSuggestions(detectedProjectPath: suggestions.detectedProjectPath)
+    }
+
+    private func pauseCaptureForEditing() {
+        // Manual prompt and context edits pause this session, not the saved launch preference.
+        draftHost = targetApp
+        liveCaptureEnabled = false
+        manuallyEdited = true
+        endAutomaticSession()
+        synchronizeCapture()
+    }
+
+    func editContext(_ text: String) {
+        guard text != contextText else { return }
+        pauseCaptureForEditing()
+        invalidate()
+        context = ConversationContext.snapshot(text, id: context?.conversationId ?? UUID().uuidString, source: "manual")
+        scheduleAutomaticAnalysis()
+        updateSuggestions(detectedProjectPath: suggestions.detectedProjectPath)
     }
 
     func setDemoMode(_ enabled: Bool) {
         activeSnapshot = nil
         invalidate()
         demoMode = enabled
+        context = nil
+        manuallyEdited = false
+        liveCaptureEnabled = true
         demoInstalledSkills = []
         if !enabled {
             prompt = ""
@@ -144,6 +194,7 @@ final class AppModel {
     func cancel() {
         task?.cancel()
         task = nil
+        automaticTask = false
         revision = UUID()
         isLoading = false
         presentationChanged()
@@ -166,7 +217,9 @@ final class AppModel {
     }
 
     func receive(_ snapshot: PromptSnapshot?) {
+        defer { updateSuggestions(detectedProjectPath: snapshot?.projectPath) }
         guard let snapshot else {
+            if context != nil { context = nil; invalidate() }
             if activeSnapshot != nil {
                 endAutomaticSession()
                 prompt = ""
@@ -183,12 +236,32 @@ final class AppModel {
         }
         invalidate()
         activeSnapshot = snapshot
+        manuallyEdited = false
         helpfulDismissed = false
         prompt = snapshot.text
         source = PromptSource(processID: snapshot.processID, bundleIdentifier: snapshot.bundleIdentifier, name: snapshot.appName)
         lastFieldID = snapshot.fieldID
+        context = snapshot.context
         guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        analyze(after: .milliseconds(900))
+        scheduleAutomaticAnalysis()
+    }
+
+    private func updateSuggestions(detectedProjectPath: String?) {
+        let recognized = source == nil || HostApp.detect(source) != nil
+        suggestions.update(prompt: recognized ? prompt : "", context: recognized ? context : nil,
+                           detectedProjectPath: detectedProjectPath)
+    }
+
+    func useSuggestion(_ suggestion: PromptSuggestion) {
+        editPrompt(suggestion.prompt)
+    }
+
+    private func scheduleAutomaticAnalysis() {
+        guard automaticRecommendationsEnabled, !captureSuspended,
+              !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              source == nil || activeSnapshot != nil || manuallyEdited else { return }
+        analyze(after: .milliseconds(300))
+        automaticTask = task != nil
     }
 
     func markRead() {
@@ -233,7 +306,8 @@ final class AppModel {
         }
         let current = revision
         let useDemo = demoMode
-        let app = sourceApp
+        let app = targetApp?.title
+        let context = context
         let analyzePrompt = analyzePrompt
         isLoading = true
         presentationChanged()
@@ -243,7 +317,7 @@ final class AppModel {
                 try Task.checkCancellation()
                 let response: AnalyzeResponse
                 if useDemo { response = DemoCatalog.analyze(text) }
-                else { response = try await analyzePrompt(text, app) }
+                else { response = try await analyzePrompt(text, app, context) }
                 guard !Task.isCancelled, let self, self.revision == current else { return }
                 self.result = response
                 self.selected = Set(response.skills.map(\.id))
@@ -286,8 +360,12 @@ final class AppModel {
                 output += "\n\nSuggested Agent Skills (read their SKILL.md and use only if relevant):\n"
                 output += chosen.map { skill in
                     let location = skill.url.isFileURL ? skill.url.path : skill.url.absoluteString
-                    return "- \(skill.name): \(location)"
+                    let rank = skill.id == result.bestSkill?.id ? " (best match from the skill library)" : ""
+                    return "- \(skill.name): \(location)\(rank)"
                 }.joined(separator: "\n")
+                if chosen.contains(where: { $0.id == result.bestSkill?.id }) {
+                    output += "\nMention the best match by name and source when responding."
+                }
             }
         }
         return output

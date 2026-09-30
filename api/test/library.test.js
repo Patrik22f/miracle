@@ -87,3 +87,21 @@ test('Library HTTP endpoint exposes metadata, and remote origins and configurabl
   assert.equal((await fetch(`${base}/skills/import`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"roots":["/"]}' })).status, 400);
   assert.equal((await fetch(`${base}/skills/import`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: 'x'.repeat(1025) })).status, 413);
 });
+
+test('Automatic local refresh discovers additions, removes deleted skills and keeps public snapshots without network', async t => {
+  const { createLocalLibraryStore, defaultRoots } = await import('../src/skill-library.js');
+  const directory = await temporary(t), root = join(directory, 'skills'), path = join(directory, 'library.json');
+  await mkdir(root);
+  const publicSkill = { id: 'example/public-example', name: 'public-example', description: 'Example workflow.', provenance: 'public-import', content: markdown('public-example') };
+  await saveLibrary({ version: 1, roots: [root], skills: [publicSkill], warnings: [], includePublic: true }, path);
+  const current = createLocalLibraryStore(path, { interval: 0, roots: [] });
+  await writeSkill(root, 'first', markdown('first-skill'));
+  const [a, b] = await Promise.all([current(), current()]);
+  assert.equal(a, b);
+  assert.deepEqual(a.skills.map(s => s.name), ['first-skill', 'public-example']);
+  await rm(join(root, 'first'), { recursive: true });
+  await writeSkill(root, 'second', markdown('second-skill'));
+  assert.deepEqual((await current()).skills.map(s => s.name), ['second-skill', 'public-example']);
+  assert.ok(defaultRoots.some(root => root.endsWith('/.cursor/skills')));
+  assert.ok(defaultRoots.some(root => root.endsWith('/plugins/cache')));
+});

@@ -9,24 +9,25 @@ The mode menu contains only Stealth and Helpful. An adjacent information button 
 - **Stealth:** a menu-bar dot signals a new recommendation; orange indicates an analysis error. Opening the review acknowledges the result.
 - **Helpful:** a nonactivating panel appears above the recognized AI prompt. It shows the recommended model, supported effort and optional skills while typing remains in the host app. The panel stays within the current display and can be dismissed for the current prompt.
 
-Settings is a separate window with General, Models and Skills tabs. Onboarding is not reused for settings. The main review and Helpful panel prioritize the prompt and model recommendation. Instructional footers, generic model explanations and raw warning paragraphs have been removed. A short source badge still distinguishes offline results from live search; errors remain visible.
+Settings is a separate window with General, Prompts, Models and Skills tabs. Onboarding is not reused for settings. The main review and Helpful panel prioritize the prompt and model recommendation. Instructional footers, generic model explanations and raw warning paragraphs have been removed. A short source badge still distinguishes offline results from live search; errors remain visible.
 
-The review shows only a single line from the beginning of the captured prompt, truncated with an ellipsis. It is plain read-only text without an input background or separate heading. Users compose their prompt in the AI application. The full captured text is still used for analysis. There is no prompt editor, Live switch, host-app picker or copy-prompt workflow in the interface.
+The review shows only a single line from the beginning of the captured prompt, truncated with an ellipsis. It is plain read-only text without an input background or separate heading. Users compose their prompt in the AI application. The full captured text is still used for analysis. Captured prompts remain read-only. **Your next task** adds project-aware suggestions and Copy prompt. **Use draft** or editing chat context pauses capture for the session and reveals **Review draft**, where the draft can be edited, copied, or replaced by resuming live capture. The host comes from the captured app; there is no host-app picker.
 
 ## Models and effort
 
-The captured application's bundle identifier automatically selects Cursor or Codex for recommendations and installation. Unsupported applications do not inherit the previous host's installation target. Claude integration is owned by the parallel lane.
+The captured application's bundle identifier automatically selects Cursor or Codex for recommendations and installation. Unsupported applications do not inherit the previous host's installation target. Claude Code uses the backend submit hook described in [CLAUDE_CODE.md](../docs/CLAUDE_CODE.md).
 
-The macOS client maps the API's existing `fast`, `balanced` and `capable` profiles onto available models. It does not change the shared API contract or send extra prompt data. Model and effort are read-only recommendations. Users change them in their AI application; Miracle exposes no model or effort picker.
+The macOS client maps the API's existing `fast`, `balanced` and `capable` profiles onto available models. Requests include the bounded prompt and available chat context; optional Groq suggestions also use sampled project excerpts. Model and effort are read-only recommendations. Users change them in their AI application; Miracle exposes no model or effort picker.
 
-- Cursor models come from a small documented catalog checked on 2026-09-30. Users enable the models available to their account in Settings. Only Grok 4.6 is enabled initially, matching the local account observed during verification. Grok models expose low, medium, high and xhigh when Custom effort is available; otherwise the account uses fixed medium. Models without verified configurable effort have no effort control.
-- Codex models are read from `$CODEX_HOME/models_cache.json` or `~/.codex/models_cache.json`. Only listed models and their declared reasoning levels are used. Hidden models are excluded. A missing catalog produces an empty state rather than invented options.
+- Cursor models are read from its local `User/globalStorage/state.vscdb` in read-only mode. Only model catalog fields and enabled/disabled overrides are extracted. Effort options come from each model’s declared parameters. Settings offers a manual fallback if Cursor’s private storage format changes. Detected settings reflect local configuration, not a guarantee of account quota or server-side access.
+- Codex models are read from `$CODEX_HOME/models_cache.json` or `~/.codex/models_cache.json`. Hidden models are excluded; declared effort options are preserved. A missing catalog produces an empty state.
+- Catalogs refresh on launch, after 30 seconds during active use, or with **Refresh models**. No model catalog or prompt is sent to a remote service.
 
-Model selection is heuristic and bounded by the configured catalog. Refresh the Cursor catalog when host capabilities change. Do not infer account access from public model availability.
+Selection first matches task capability (`fast`, `balanced`, `capable`), then effort support, then host catalog order. When a tier is missing, the nearest available tier is selected. Effort maps to the nearest supported level, preferring more reasoning on ties. Names and local descriptions supply heuristic capability tiers; they are not benchmark scores. The review explains both task effort and model selection, including when only one model is enabled.
 
 The recommended supported effort appears as plain text. There are no dropdowns, segments, selection states or disabled input controls in the recommendation card.
 
-Sources: [Cursor models](https://cursor.com/docs/models), [Grok 4.6 effort](https://cursor.com/docs/models/grok-4-6), [Grok 4.7 effort](https://cursor.com/docs/models/grok-4-7), [Composer 2.5](https://cursor.com/docs/models/cursor-composer-2-5). Codex's installed model cache is the source for the local account.
+Cursor’s local storage is an undocumented adapter with fixture and opt-in live tests. Public model context: [Cursor models](https://cursor.com/docs/models-and-pricing). The local catalogs are authoritative for the choices displayed on this Mac.
 
 ## Skill installation
 
@@ -55,11 +56,13 @@ The web view only loads bundled files in a nonpersistent store, with remote navi
 
 ## Capture and build
 
-The shared live monitor follows accessible text fields. Recognized Cursor and Codex prompt labels trigger analysis after the typing pause; search, code editor and secure fields are excluded from automatic analysis. An unrecognized host field can be reanalyzed from the preview's refresh action. Live capture starts on, with no visible toggle; the obsolete saved-off preference is cleared during initialization. Settings suspends external text reads; demo keeps the same live capture path and substitutes local recommendations. Prompt text remains in memory.
+The shared live monitor follows accessible text fields. The review includes a chat-context editor and optional project-aware suggestions; [PROMPT_SUGGESTIONS.md](../docs/PROMPT_SUGGESTIONS.md) describes their setup and data flow. Recognized Cursor and Codex prompt labels trigger analysis after the typing pause; search, code editor and secure fields are excluded from automatic analysis. An unrecognized host field can be reanalyzed from the preview's refresh action. Live capture starts on, with no visible toggle; the obsolete saved-off preference is cleared during initialization. Settings suspends external text reads; demo keeps the same live capture path and substitutes local recommendations. Prompt text remains in memory.
 
 Build with `npm run macos:build` after quitting Miracle (or its previous Preflight build). The build reuses an Apple Development signing identity, installs at `~/Applications/Miracle.app`, and links `build/Miracle.app` there. The previous default Preflight installation is migrated only after the new bundle has been signed and verified. `build/Preflight.app` remains a compatibility symlink. The bundle identifier and internal Swift module stay unchanged to retain preferences and signing identity; the visible app and executable are named Miracle. `MIRACLE_APP_PATH` and `MIRACLE_CODESIGN_IDENTITY` accept custom values, with the previous `PREFLIGHT_` variables retained as aliases. Accessibility may need a one-time refresh when migrating from an ad-hoc build. `--diagnostics` logs capture state only.
 
 ## Verification
+
+The integrated `main` build passed 148 backend tests and 78 Swift tests. A separately signed test bundle launched successfully; onboarding, prompt settings, model catalogs and Shopfront resources were checked. The regular installation build was left untouched because an older app was running. See [the current handoff](../docs/BACKEND_HANDOFF.md) for checks and remaining acceptance work. The records below describe earlier UI builds.
 
 Run `npm test`, `npm run macos:test` and `git diff --check`. To run the optional real GitHub installation check into a disposable temporary folder:
 

@@ -15,7 +15,7 @@ struct DemoTests {
 
     @MainActor @Test("Real Cursor prompts drive demo recommendations without contacting the API")
     func typing() async throws {
-        let model = AppModel { _, _ in
+        let model = AppModel { _, _, _ in
             Issue.record("Demo must not contact the backend")
             throw ClientError.message("Unexpected API call")
         }
@@ -43,7 +43,7 @@ struct DemoTests {
 
     @MainActor @Test("Clearing or leaving demo discards pending results and resumes the detected host")
     func exit() async {
-        let model = AppModel { _, _ in try .demo() }
+        let model = AppModel { _, _, _ in try .demo() }
         model.loadDemo()
         model.receiveCapture(.captured(.cursorFixture(text: DemoCatalog.scenarios[0].prompt)))
         let first = model.task
@@ -84,7 +84,7 @@ struct DemoTests {
     @MainActor @Test("Entering demo rejects an already running backend response")
     func lateBackendResponse() async throws {
         let deferred = DeferredValue<AnalyzeResponse>()
-        let model = AppModel { _, _ in await deferred.request() }
+        let model = AppModel { _, _, _ in await deferred.request() }
         model.receiveCapture(.captured(.cursorFixture(text: "Original live request")))
         let pending = model.task
         await deferred.waitUntilRequested()
