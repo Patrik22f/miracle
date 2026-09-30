@@ -4,34 +4,45 @@ struct OverlayView: View {
     @Bindable var model: AppModel
     let close: () -> Void
     let settings: AppSettings
+    let catalog: ModelCatalog
+    let installer: SkillInstallModel
     var openSettings: () -> Void = {}
+    var modeChanged: () -> Void = {}
     @State private var showingLibrary = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Image(systemName: "sparkle").font(.title).foregroundStyle(.tint)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Preflight").font(.title2.bold())
-                    Text("The right skills, before you send.").foregroundStyle(.secondary)
-                }
+            HStack(spacing: 10) {
+                Image(systemName: "sparkle").font(.title2).foregroundStyle(.tint)
+                Text("Preflight").font(.title2.weight(.semibold))
+                if model.demoMode { Text("Demo").font(.caption).foregroundStyle(.secondary) }
                 Spacer()
-                Button("Skill library", systemImage: "books.vertical") { showingLibrary = true }
-                    .controlSize(.small)
-                Button(action: openSettings) { Label(settings.mode.title, systemImage: settings.mode.symbol) }
-                    .buttonStyle(.borderless).help("Change display mode")
+                Button { showingLibrary = true } label: { Image(systemName: "books.vertical") }
+                    .accessibilityLabel("Skill library")
+                Button(action: openSettings) { Image(systemName: "gearshape") }.accessibilityLabel("Settings")
+                Button(action: close) { Image(systemName: "xmark") }.accessibilityLabel("Close Preflight")
+                    .keyboardShortcut(.cancelAction)
+            }.buttonStyle(.borderless)
+            HStack {
+                DisplayModeControl(settings: settings, changed: modeChanged)
+                Spacer()
+                Picker("Application", selection: $model.targetApp) {
+                    ForEach(HostApp.allCases) { Text($0.title).tag($0) }
+                }.labelsHidden().fixedSize().accessibilityLabel("Target application")
             }
+            Divider()
             HStack {
                 Text("Your prompt").font(.headline)
                 Spacer()
-                Toggle("Demo mode", isOn: Binding(get: { model.demoMode }, set: model.setDemoMode))
-                    .toggleStyle(.switch).controlSize(.small)
+                Toggle("Live", isOn: Binding(get: { model.liveCaptureEnabled && !model.demoMode }, set: model.setLiveCaptureEnabled))
+                    .toggleStyle(.switch).controlSize(.mini).disabled(model.demoMode)
+                    .accessibilityLabel("Live capture")
             }
-            LiveCaptureView(model: model)
             TextEditor(text: Binding(get: { model.prompt }, set: model.editPrompt))
-                .font(.body).frame(minHeight: 90, maxHeight: 120)
-                .padding(6).background(.background, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator))
+                .font(.body).scrollContentBackground(.hidden)
+                .frame(height: 90).padding(10)
+                .background(.background, in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(.separator))
                 .accessibilityLabel("Prompt to analyze")
             DisclosureGroup(model.contextLabel) {
                 VStack(alignment: .leading, spacing: 6) {
@@ -46,129 +57,69 @@ struct OverlayView: View {
                 }
             }.font(.caption)
             HStack {
-                Button("Analyze prompt") { model.analyze() }
-                    .buttonStyle(.borderedProminent).disabled(model.isLoading || model.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .keyboardShortcut(.return, modifiers: .command)
-                if model.isLoading { ProgressView().controlSize(.small); Button("Cancel", action: model.cancel) }
+                if model.captureStatus == .permissionRequired {
+                    Button("Enable Accessibility", action: AccessibilityPermission.request).controlSize(.small)
+                } else if let app = model.sourceApp {
+                    Label(app, systemImage: "text.cursor").font(.caption).foregroundStyle(.secondary)
+                }
                 Spacer()
-                Button("Accessibility…", action: AccessibilityPermission.request).buttonStyle(.link)
+                if model.isLoading {
+                    ProgressView().controlSize(.small)
+                    Button("Cancel", action: model.cancel)
+                } else {
+                    Button("Analyze") { model.analyze() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(model.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .keyboardShortcut(.return, modifiers: .command)
+                }
             }
-            if let message = model.message {
-                Text(message).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+            if model.hasError, let message = model.message {
+                Label(message, systemImage: "exclamationmark.circle").font(.callout).foregroundStyle(.red)
             }
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 18) {
                     if let result = model.result {
-                        HStack {
-                            Text("Recommended skills").font(.headline)
-                            Spacer()
-                            Text(model.demoMode ? "Demo fixture" : result.sourceLabel)
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        if let count = result.meta.importedCount {
-                            Text("\(count) imported skills evaluated · Up to 3 complementary suggestions")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
+                        ModelRecommendationView(result: result, host: model.targetApp, settings: settings, catalog: catalog)
                         Text(result.contextLabel).font(.caption).foregroundStyle(.secondary)
-                        if result.skills.isEmpty {
-                            Text(result.emptySkillsLabel).foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text("Skills").font(.headline)
+                                Text("\(result.skills.count)").font(.caption).foregroundStyle(.secondary)
+                                Spacer()
+                                Text(model.demoMode ? "Demo" : result.sourceLabel).font(.caption).foregroundStyle(.secondary)
+                            }.padding(.bottom, 4)
+                            if result.skills.isEmpty { Text(result.emptySkillsLabel).font(.callout).foregroundStyle(.secondary) }
+                            ForEach(result.skills) { skill in
+                                RecommendedSkillRow(skill: skill, model: model, settings: settings, installer: installer, openSettings: openSettings)
+                                if skill.id != result.skills.last?.id { Divider() }
+                            }
                         }
-                        ForEach(result.skills) { skill in
-                            VStack(alignment: .leading, spacing: 6) {
-                                Toggle(isOn: Binding(get: { model.selected.contains(skill.id) }, set: { enabled in
-                                    if enabled { model.selected.insert(skill.id) } else { model.selected.remove(skill.id) }
-                                })) { Text(skill.name).font(.headline) }
-                                Text(skill.reason).font(.callout)
-                                if let evaluation = skill.evaluation {
-                                    SkillEvaluationView(evaluation: evaluation)
-                                }
-                                HStack {
-                                    Text(skill.provenance == "installed" ? "Installed on this Mac" : skill.source).lineLimit(1)
-                                    Spacer()
-                                    Link(skill.provenance == "installed" ? "Open SKILL.md" : "View skill ↗", destination: skill.url)
-                                }.font(.caption).foregroundStyle(.secondary)
-                            }.padding(12).background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 10))
-                        }
-                        Divider()
-                        HStack {
-                            Label("\(result.effort.level.capitalized) effort", systemImage: "slider.horizontal.3")
-                            Spacer()
-                            Text("\(result.model.profile.capitalized) model")
-                        }.font(.callout)
-                        Text("Suggestions only. Set model and effort in your AI app.").font(.caption).foregroundStyle(.secondary)
-                        Text(result.effort.reason).font(.caption).foregroundStyle(.secondary)
-                        Text(result.model.reason).font(.caption).foregroundStyle(.secondary)
-                        ForEach(result.meta.warnings, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
-                    } else if !model.isLoading {
-                        ContentUnavailableView("Ready when you are", systemImage: "text.magnifyingglass", description: Text("With Live capture on, text from other apps appears above. Recognized Cursor and Codex prompts get automatic recommendations when enabled. You can also choose Analyze prompt or use ⌥⌘Return."))
+                    } else if !model.isLoading, !model.hasError {
+                        VStack(spacing: 10) {
+                            Image(systemName: "text.magnifyingglass").font(.largeTitle).foregroundStyle(.tertiary)
+                            Text("Ready for your prompt").font(.callout).foregroundStyle(.secondary)
+                        }.frame(maxWidth: .infinity).padding(.vertical, 34)
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
             Divider()
             HStack {
-                Button("Close", action: close).keyboardShortcut(.cancelAction)
+                if !model.hasError, model.message == "Copied" {
+                    Label("Copied", systemImage: "checkmark").font(.caption).foregroundStyle(.secondary)
+                }
                 Spacer()
-                Button("Copy original") { model.copy(includeSkills: false) }.disabled(model.prompt.isEmpty)
-                Button("Copy with skills") { model.copy(includeSkills: true) }
-                    .buttonStyle(.borderedProminent).disabled(model.result == nil || model.selected.isEmpty)
+                Button("Copy prompt") { model.copy(includeSkills: false) }.disabled(model.prompt.isEmpty)
+                if model.result?.skills.isEmpty == false {
+                    Button("Copy with skills") { model.copy(includeSkills: true) }
+                        .buttonStyle(.borderedProminent).disabled(model.selected.isEmpty)
+                }
             }
-            Text("Prompt and chat context stay on your Mac. Skills are selected from the local library.")
-                .font(.caption2).foregroundStyle(.secondary)
         }
         .padding(22)
-        .frame(minWidth: 510, idealWidth: 560)
-        .sheet(isPresented: $showingLibrary) { SkillLibraryView() }
-    }
-}
-
-private struct SkillEvaluationView: View {
-    let evaluation: AnalyzeResponse.Evaluation
-
-    var body: some View {
-        DisclosureGroup("Why this skill · \(evaluation.score)/100 fit") {
-            VStack(alignment: .leading, spacing: 5) {
-                ForEach(evaluation.criteria) { criterion in
-                    HStack {
-                        Text(criterion.label)
-                        Spacer()
-                        Text("\(criterion.points)/\(criterion.maximum)").monospacedDigit()
-                    }
-                }
-                Text("Minimum fit: \(evaluation.threshold). This score measures the match, not skill quality.")
-                    .foregroundStyle(.secondary)
-            }.font(.caption).padding(.top, 4)
-        }.font(.caption)
-    }
-}
-
-private struct LiveCaptureView: View {
-    @Bindable var model: AppModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack {
-                Toggle("Live capture", isOn: Binding(
-                    get: { model.liveCaptureEnabled && !model.demoMode },
-                    set: model.setLiveCaptureEnabled
-                ))
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .disabled(model.demoMode)
-                .help("Follow the focused text field in other apps. Editing here pauses capture.")
-                Spacer()
-                if let app = model.sourceApp {
-                    Text("Captured from \(app)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                }
-            }
-            Label(model.captureStatus.description, systemImage: model.captureStatus.symbol)
-                .font(.caption).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            if model.captureStatus == .permissionRequired {
-                Button("Enable Accessibility…", action: AccessibilityPermission.request)
-                    .controlSize(.small)
-            }
+        .frame(minWidth: 520, idealWidth: 560)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .sheet(isPresented: $showingLibrary) {
+            SkillLibraryView(host: model.targetApp, settings: settings, installer: installer, openSettings: openSettings)
         }
-        .padding(10)
-        .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 8))
     }
 }

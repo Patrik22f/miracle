@@ -21,29 +21,23 @@ npm run macos:build
 open build/Preflight.app
 ```
 
-The sparkle menu-bar item opens the overlay. Click **Enable Accessibility…**, allow **Preflight** in System Settings → Privacy & Security → Accessibility, and leave **Live capture** on. Focus an editable prompt field in another app and type: its full text follows into **Your prompt**, including edits and deletions. The panel stays visible while you work in the other app. Capture recovers after permission is granted without relaunching.
+Left-click the sparkle menu-bar icon to open the review popover; right-click for its menu. Settings has separate General, Models and Skills tabs. Click **Enable Accessibility…**, allow **Preflight** in System Settings → Privacy & Security → Accessibility, and leave **Live capture** on. Captured text appears in **Your prompt**, including edits and deletions. Capture recovers after permission is granted without relaunching.
 
 On macOS versions that label this permission **Device Control and Data Access**, use that section under Privacy & Security. macOS may require Touch ID or your account password to approve it.
 
-With **Recommend automatically as I write** enabled, recognized Cursor prompts are analyzed after a 900 ms typing pause. Other captured fields wait for **Analyze prompt**; the shortcut also analyzes explicitly. Pausing automatic recommendations keeps text capture available. Editing or pasting inside Preflight pauses Live capture so your draft is protected; switch **Live capture** back on to resume. Setup and demo mode suspend capture. Preferences are saved, but prompt text is not. See [presentation modes](macos/README.md).
+With **Recommend automatically as I write** enabled, recognized Cursor and Codex prompts are analyzed after a 300 ms typing pause. Other captured fields wait for **Analyze**. Pausing automatic recommendations keeps text capture available. Editing the prompt or chat context inside Preflight pauses Live capture for that session so your draft is protected; switch **Live capture** back on to resume. Setup and demo mode suspend capture. Preferences are saved, but prompt text is not. See [presentation modes](macos/README.md).
 
-**⌥⌘Return** still captures and analyzes a one-time snapshot, preferring selected text. It pauses live capture to preserve your selected excerpt. If a host does not expose an editable Accessibility field, copy and paste into Preflight instead. See [capture architecture and the host verification checklist](docs/LIVE_CAPTURE.md).
+The review opens from the menu bar; the global capture shortcut is no longer registered. If a host does not expose an editable Accessibility field, copy and paste into Preflight instead. See [capture architecture and the host verification checklist](docs/LIVE_CAPTURE.md).
 
-Open **Skill library** to browse or refresh imported installed and public skills. Expand **Why this skill** to inspect the fit score. Matching checks purpose, platform/artifact, prerequisites, description evidence, and available instructions. The default content index returns up to three complementary skills scoring at least 70/100 across 12 criteria, with source hashes and instruction line evidence. See [the import and matching criteria](docs/SKILL_MATCHING.md).
+Open **Skill library** to browse or refresh imported installed and public skills. Each recommendation shows its source and match score. Install actions target Cursor or Codex on this Mac or in a project folder chosen in Settings. Matching checks purpose, platform/artifact, prerequisites, description evidence, and available instructions. The default content index returns up to three complementary skills scoring at least 70/100 across 12 criteria, with source hashes and instruction line evidence. See [the import and matching criteria](docs/SKILL_MATCHING.md).
 
 Review the skills, select the ones you want, and click **Copy with skills**. Paste back into your AI app, review, and send. Closing the overlay leaves the original input untouched.
 
-For a UI-only demo, no backend is needed:
-
-```sh
-open build/Preflight.app --args --demo
-```
-
-Or choose **Try demo** from the menu bar. Demo mode always shows the clearly labeled sample response, regardless of the text. Turn Demo mode off for real analysis. The API can also work offline with `SKILLS_MODE=offline npm start`.
+For a UI-only demo, choose **Try demo** from the menu-bar menu; no backend is needed. Demo mode always shows the clearly labeled sample response, regardless of the text. Turn Demo mode off for real analysis. The API can also work offline with `SKILLS_MODE=offline npm start`.
 
 ## What's working
 
-- Native SwiftUI review, Stealth menu-bar notifications, Helpful prompt-anchored recommendations, onboarding, and a dedicated registered global shortcut.
+- Native SwiftUI review, Stealth menu-bar notifications, Helpful prompt-anchored recommendations, onboarding, dedicated settings, and model/effort recommendations for Cursor and Codex.
 - Automatic capture of supported focused editable text inputs, app provenance, persistent pause/resume, secure/read-only field exclusion, and paste fallback.
 - Background AX reads, bounded timeouts, serial sampling, permission recovery, stale-read rejection, and automatic pause for manual editing and demo mode.
 - `POST /analyze` with request validation, bounded input, timeouts, errors, and stable JSON shapes.
@@ -75,7 +69,7 @@ Both branches start from the same scaffold. Open small PRs to `main`; pull main 
 ## Repository map
 
 ```text
-macos/         Swift package: menu bar, hotkey, focused input, overlay, API client
+macos/         Swift package: menu bar, focused input, review, model advice, skill installer, API client
 api/src/       HTTP server, task analysis, skills search and ranking, catalog
 api/test/      Offline behavior, upstream failure, API and contract tests
 api/eval/      Public-search and imported-skill prompt evaluation cases
@@ -117,11 +111,11 @@ Default `knowledge` mode selects from the local content index with `knowledge-v1
 
 The importer supports ten configured public `SKILL.md` starter sources and the official Skills API (`npm run skills:import -- --api`, requiring `VERCEL_OIDC_TOKEN`). `--discover` imports up to 30 allowlisted curated results with complete file bundles. Default local roots include both Codex and Claude Code. Unstudied live search results are excluded from `knowledge` recommendations. The backend does not use an LLM reranker or perform security audits. All results say `not-audited`. Install counts are returned only when supplied by live search.
 
-This version follows the focused editable field through Accessibility and keeps a dedicated pre-send shortcut; it never intercepts another app's Enter key. It copies skill paths and links; it does **not** install skill dependencies, change the host model, or automatically send the prompt. AX support depends on the target app and focused control; rich web editors and terminal prompts may require paste. Cursor 3.22.12's Agents composer was verified on this Mac: successive unsent edits appeared automatically and clearing the composer cleared Preflight. The user also confirmed that an unsent prompt typed in Codex mirrors automatically. Other hosts require their own acceptance checks. “Any app” means an app exposing the supported Accessibility text semantics, not universal editor compatibility.
+This version follows the focused editable field through Accessibility; it never intercepts another app's Enter key. It copies selected skill paths and links. Optional installation copies or downloads a complete skill package without running its commands or replacing an existing installation. Model choices are recommendations; the app does not change the host model or send the prompt. AX support depends on the target app and focused control; rich web editors and terminal prompts may require paste. Cursor 3.22.12's Agents composer was verified on this Mac: successive unsent edits appeared automatically and clearing the composer cleared Preflight. The user also confirmed that an unsent prompt typed in Codex mirrors automatically. Other hosts require their own acceptance checks. “Any app” means an app exposing the supported Accessibility text semantics, not universal editor compatibility.
 
 ## Local data flow
 
-The API binds to `127.0.0.1` and rejects browser origins. Live capture reads the focused editable field in any accessible foreground app, not just AI apps. It skips Preflight itself, secure fields identified by Accessibility, and read-only controls. Captured text stays in memory. Analysis is explicit except for recognized Cursor prompts when automatic recommendations are enabled. Raw prompts go only from the native client to this local API during analysis. In default `knowledge` mode nothing leaves the device during analysis. Legacy live-discovery modes send only controlled topic labels (such as `react performance`) to skills.sh. No prompt logging, telemetry, prompt persistence, or LLM provider calls. Imported skill snapshots persist only in the ignored local `.preflight/` directory. Clicking a skill link opens its local instructions or public source. Copy actions intentionally replace the clipboard. Do not expose this unauthenticated development API to a network.
+The API binds to `127.0.0.1` and rejects browser origins. Live capture reads the focused editable field in any accessible foreground app, not just AI apps. It skips Preflight itself, secure fields identified by Accessibility, and read-only controls. Captured text stays in memory. Analysis is explicit except for recognized Cursor and Codex prompts when automatic recommendations are enabled. Raw prompts go only from the native client to this local API during analysis. In default `knowledge` mode nothing leaves the device during analysis. Legacy live-discovery modes send only controlled topic labels (such as `react performance`) to skills.sh. No prompt logging, telemetry, prompt persistence, or LLM provider calls. Imported skill snapshots persist only in the ignored local `.preflight/` directory. Clicking a skill link opens its local instructions or public source. Copy actions intentionally replace the clipboard. Do not expose this unauthenticated development API to a network.
 
 Quit Preflight before rebuilding; the build script refuses to overwrite a running app. It automatically selects a single available Apple Development certificate and remembers that identity locally in `build/.signing-identity`. With multiple certificates, set `PREFLIGHT_CODESIGN_IDENTITY` to the desired name or SHA-1. Builds are signed in a temporary directory, then installed at `~/Applications/Preflight.app` and verified. The `build/Preflight.app` path is a symlink to that installation. Both signing and the runnable bundle stay outside iCloud storage, which can invalidate signatures by reattaching Finder metadata. Set `PREFLIGHT_APP_PATH` to another absolute, non-iCloud `.app` path if needed. This is development signing, not notarized distribution.
 

@@ -24,6 +24,7 @@ final class AppModel {
     var hasUnreadRecommendation = false
     var helpfulDismissed = false
     var hasError = false
+    var targetApp: HostApp = .cursor
     @ObservationIgnored var presentationChanged: () -> Void = {}
     @ObservationIgnored var permissionChanged: (Bool) -> Void = { _ in }
     @ObservationIgnored private let monitor: LivePromptMonitor
@@ -105,6 +106,7 @@ final class AppModel {
     }
 
     private func applyCapture(_ captured: CapturedPrompt) {
+        if source != captured.source, let host = HostApp.detect(captured.source) { targetApp = host }
         if liveCaptureEnabled, automaticRecommendationsEnabled, let snapshot = captured.automaticSnapshot {
             receive(snapshot)
             return
@@ -120,16 +122,23 @@ final class AppModel {
 
     func editPrompt(_ text: String) {
         guard text != prompt else { return }
-        setLiveCaptureEnabled(false)
+        pauseCaptureForEditing()
         invalidate()
         source = nil
         lastFieldID = nil
         prompt = text
     }
 
+    private func pauseCaptureForEditing() {
+        // Manual prompt and context edits pause this session, not the saved launch preference.
+        liveCaptureEnabled = false
+        endAutomaticSession()
+        synchronizeCapture()
+    }
+
     func editContext(_ text: String) {
         guard text != contextText else { return }
-        setLiveCaptureEnabled(false)
+        pauseCaptureForEditing()
         invalidate()
         context = ConversationContext.snapshot(text, id: context?.conversationId ?? UUID().uuidString, source: "manual")
     }
@@ -187,6 +196,7 @@ final class AppModel {
         helpfulDismissed = false
         prompt = snapshot.text
         source = PromptSource(processID: snapshot.processID, bundleIdentifier: snapshot.bundleIdentifier, name: snapshot.appName)
+        if let host = HostApp.detect(source) { targetApp = host }
         lastFieldID = snapshot.fieldID
         context = snapshot.context
         guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
@@ -256,7 +266,7 @@ final class AppModel {
             } catch {
                 guard !Task.isCancelled, let self, self.revision == current else { return }
                 self.isLoading = false
-                self.message = "\(error.localizedDescription) Start the API with npm start, or turn on Demo mode."
+                self.message = error.localizedDescription
                 self.hasError = true
                 self.hasUnreadRecommendation = true
                 self.presentationChanged()
@@ -277,7 +287,7 @@ final class AppModel {
         let output = promptWithSkills(includeSkills: includeSkills)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(output, forType: .string)
-        message = "Copied. Paste into your AI app, review, and send."
+        message = "Copied"
         hasError = false
         markRead()
     }

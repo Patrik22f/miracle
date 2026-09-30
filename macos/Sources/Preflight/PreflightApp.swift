@@ -9,11 +9,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     private var statusItem: NSStatusItem?
     private let badge = StatusBadgeView(frame: NSRect(x: 23, y: 14, width: 6, height: 6))
     private let popover = NSPopover()
-    private var panel: NSPanel?
+    private let catalog = ModelCatalog()
+    private let installer = SkillInstallModel()
+    private var settingsWindow: NSWindow?
     private var helpfulPanel: RecommendationPanel?
     private var setupWindow: NSWindow?
-    private var hotKey: GlobalHotKey?
-    private var captureTask: Task<Void, Never>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -33,24 +33,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         model.permissionChanged = { [weak self] granted in self?.settings.permissionGranted = granted }
         synchronizeMonitoring()
         model.startCapture()
-        hotKey = GlobalHotKey { [weak self] in
-            guard let self else { return }
-            self.captureTask?.cancel()
-            self.captureTask = Task { [weak self] in
-                guard let self else { return }
-                await self.model.capture() // Capture before the review UI takes focus.
-                guard !Task.isCancelled else { return }
-                self.openPanel()
-            }
-        }
-        do { try hotKey?.start() } catch { model.message = error.localizedDescription }
+        Task { await catalog.refresh() }
         refreshPresentation()
-        if ProcessInfo.processInfo.arguments.contains("--demo") { demo() }
-        else if !settings.completedOnboarding { showSetup() }
+        if !settings.completedOnboarding { showOnboarding() }
     }
 
     private func reviewView(close: @escaping () -> Void) -> OverlayView {
-        OverlayView(model: model, close: close, settings: settings, openSettings: { [weak self] in self?.showSetup() })
+        OverlayView(model: model, close: close, settings: settings, catalog: catalog, installer: installer,
+                    openSettings: { [weak self] in self?.showSettings() }, modeChanged: { [weak self] in self?.settingsChanged() })
     }
 
     private func installMainMenu() {
@@ -58,7 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         let application = NSMenuItem()
         let applicationMenu = NSMenu(title: "Preflight")
         application.submenu = applicationMenu
-        let settingsItem = add("Settings…", action: #selector(showSetup), to: applicationMenu)
+        let settingsItem = add("Settings…", action: #selector(showSettings), to: applicationMenu)
         settingsItem.keyEquivalent = ","
         applicationMenu.addItem(.separator())
         let quitItem = add("Quit Preflight", action: #selector(quit), to: applicationMenu)
@@ -81,32 +71,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
 
     @objc private func statusClicked() {
         if NSApp.currentEvent?.type == .rightMouseUp { showMenu(); return }
-        if !settings.completedOnboarding { showSetup(); return }
+        if !settings.completedOnboarding { showOnboarding(); return }
         if popover.isShown { popover.performClose(nil); return }
+        showReview()
+    }
+
+    @objc private func showReview() {
+        guard settings.completedOnboarding else { showOnboarding(); return }
         helpfulPanel?.orderOut(nil)
         guard let button = statusItem?.button else { return }
         let controller = NSHostingController(rootView: reviewView { [weak self] in self?.popover.performClose(nil) })
-        let height = min(700, (button.window?.screen?.visibleFrame.height ?? 800) - 40)
+        let height = min(740, (button.window?.screen?.visibleFrame.height ?? 800) - 40)
         popover.contentViewController = controller
         popover.contentSize = NSSize(width: 560, height: height)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        NSApp.activate(ignoringOtherApps: true)
+        popover.contentViewController?.view.window?.makeKey()
         model.markRead()
     }
 
     private func showMenu() {
         let menu = NSMenu()
-        add("Open Preflight", action: #selector(openPanel), to: menu)
+        add("Open Preflight", action: #selector(showReview), to: menu)
         menu.addItem(.separator())
-        let stealth = add("Stealth", action: #selector(chooseStealth), to: menu)
+        let modeItem = NSMenuItem(title: "Display mode", action: nil, keyEquivalent: "")
+        let modes = NSMenu(title: "Display mode")
+        modeItem.submenu = modes
+        menu.addItem(modeItem)
+        let stealth = add("Stealth", action: #selector(chooseStealth), to: modes)
         stealth.state = settings.mode == .stealth ? .on : .off
-        let helpful = add("Helpful", action: #selector(chooseHelpful), to: menu)
+        let helpful = add("Helpful", action: #selector(chooseHelpful), to: modes)
         helpful.state = settings.mode == .helpful ? .on : .off
         add(settings.automatic ? "Pause automatic recommendations" : "Resume automatic recommendations", action: #selector(toggleAutomatic), to: menu)
         let capture = add("Live capture", action: #selector(toggleLiveCapture), to: menu)
         capture.state = model.liveCaptureEnabled && !model.demoMode ? .on : .off
         capture.isEnabled = !model.demoMode
         add("Enable Accessibility…", action: #selector(permission), to: menu)
-        add("Settings…", action: #selector(showSetup), to: menu)
+        add("Settings…", action: #selector(showSettings), to: menu)
         add("Try demo", action: #selector(demo), to: menu)
         menu.addItem(.separator())
         add("Quit Preflight", action: #selector(quit), to: menu)
@@ -121,44 +122,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         return item
     }
 
-    @objc func openPanel() {
-        popover.performClose(nil)
-        helpfulPanel?.orderOut(nil)
-        if panel == nil {
-            let window = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 560, height: 730), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
-            window.title = "Preflight"
-            window.level = .floating
-            window.hidesOnDeactivate = false
-            window.isReleasedWhenClosed = false
-            window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
-            window.contentMinSize = NSSize(width: 510, height: 560)
-            window.delegate = self
-            window.center()
-            panel = window
-        }
-        panel?.contentView = NSHostingView(rootView: reviewView { [weak self] in self?.closePanel() })
-        NSApp.activate(ignoringOtherApps: true)
-        panel?.makeKeyAndOrderFront(nil)
-        model.markRead()
-    }
-
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag { openPanel() }
-        return true
+        false
     }
 
-    @objc private func showSetup() {
-        popover.performClose(nil)
-        helpfulPanel?.orderOut(nil)
+    private func showOnboarding() {
+        guard !settings.completedOnboarding else { return }
+        if let setupWindow { setupWindow.makeKeyAndOrderFront(nil); return }
         model.setCaptureSuspended(true)
-        if setupWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 610, height: 590), styleMask: [.titled, .closable], backing: .buffered, defer: false)
-            window.isReleasedWhenClosed = false
-            window.title = settings.completedOnboarding ? "Preflight Settings" : "Welcome to Preflight"
-            window.delegate = self
-            setupWindow = window
-        }
-        setupWindow?.contentView = NSHostingView(rootView: SetupView(settings: settings, onboarding: !settings.completedOnboarding, complete: { [weak self] in
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 610, height: 500), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.title = "Welcome to Preflight"
+        window.delegate = self
+        setupWindow = window
+        window.contentView = NSHostingView(rootView: SetupView(settings: settings, complete: { [weak self] in
             guard let self else { return }
             self.settings.completedOnboarding = true
             self.setupWindow?.orderOut(nil)
@@ -166,14 +143,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             self.synchronizeMonitoring()
             self.refreshPresentation()
         }, changed: { [weak self] in self?.settingsChanged() }))
-        setupWindow?.center()
+        window.center()
         NSApp.activate(ignoringOtherApps: true)
-        setupWindow?.makeKeyAndOrderFront(nil)
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    @objc private func showSettings() {
+        guard settings.completedOnboarding else { showOnboarding(); return }
+        popover.performClose(nil)
+        helpfulPanel?.orderOut(nil)
+        if let settingsWindow { settingsWindow.makeKeyAndOrderFront(nil); return }
+        model.setCaptureSuspended(true)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 540, height: 550), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.title = "Preflight Settings"
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        window.contentView = NSHostingView(rootView: SettingsView(settings: settings, model: model, catalog: catalog,
+            changed: { [weak self] in self?.settingsChanged() }, demo: { [weak self] in self?.model.loadDemo() }))
+        settingsWindow = window
+        window.center()
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
     }
 
     private func synchronizeMonitoring() {
         model.setAutomaticRecommendationsEnabled(settings.completedOnboarding && settings.automatic)
-        model.setCaptureSuspended(!settings.completedOnboarding || setupWindow?.isVisible == true)
+        model.setCaptureSuspended(!settings.completedOnboarding || setupWindow?.isVisible == true || settingsWindow?.isVisible == true)
     }
 
     private func settingsChanged() {
@@ -183,7 +178,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
 
     private func refreshPresentation() {
         settings.monitoringStatus = model.captureStatus.description
-        if model.hasUnreadRecommendation && (popover.isShown || panel?.isVisible == true) {
+        if model.hasUnreadRecommendation && popover.isShown {
             model.markRead()
             return
         }
@@ -193,7 +188,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         statusItem?.button?.toolTip = "Preflight · \(settings.mode.title) · \(state)"
         statusItem?.button?.setAccessibilityLabel("Preflight, \(settings.mode.title), \(state)")
         guard settings.mode == .helpful, !model.helpfulDismissed, !popover.isShown,
-              panel?.isVisible != true, setupWindow?.isVisible != true,
+              settingsWindow?.isVisible != true, setupWindow?.isVisible != true,
               model.result != nil || model.hasError,
               let snapshot = model.activeSnapshot,
               NSWorkspace.shared.frontmostApplication?.processIdentifier == snapshot.processID,
@@ -216,19 +211,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             window.backgroundColor = .clear
             window.hasShadow = true
             window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
-            window.contentView = NSHostingView(rootView: HelpfulView(model: model, review: { [weak self] in self?.openPanel() }, dismiss: { [weak self] in self?.model.dismissHelpful() }))
+            window.contentView = NSHostingView(rootView: HelpfulView(model: model, settings: settings, catalog: catalog, installer: installer, dismiss: { [weak self] in self?.model.dismissHelpful() }, review: { [weak self] in self?.showReview() }))
             helpfulPanel = window
         }
-        let height = model.hasError ? 220.0 : min(430, 225 + Double(model.result?.skills.count ?? 0) * 78)
+        let height = model.hasError ? 180.0 : min(480, 300 + Double(model.result?.skills.count ?? 0) * 64)
         helpfulPanel?.setFrame(PanelPlacement.frame(above: anchor, size: CGSize(width: 420, height: height), visibleFrame: screen.visibleFrame.insetBy(dx: 8, dy: 8)), display: true)
         // orderFront leaves the host's prompt as the key input. Never activate here.
         helpfulPanel?.orderFrontRegardless()
     }
 
-    func closePanel() { model.cancel(); panel?.orderOut(nil); model.dismissHelpful() }
     func windowWillClose(_ notification: Notification) {
         guard let window = notification.object as? NSWindow else { return }
-        if window === panel { model.cancel(); model.dismissHelpful() }
+        if window === settingsWindow {
+            settingsWindow = nil
+            synchronizeMonitoring()
+        }
         if window === setupWindow {
             setupWindow = nil
             synchronizeMonitoring()
@@ -238,14 +235,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     @objc private func chooseStealth() { settings.mode = .stealth; settingsChanged() }
     @objc private func chooseHelpful() { settings.mode = .helpful; settingsChanged() }
     @objc private func toggleAutomatic() { settings.automatic.toggle(); settingsChanged() }
-    @objc func demo() { model.loadDemo(); openPanel() }
+    @objc func demo() { model.loadDemo(); showReview() }
     @objc private func toggleLiveCapture() { model.setLiveCaptureEnabled(!model.liveCaptureEnabled) }
     @objc private func permission() { AccessibilityPermission.request() }
     @objc func quit() { NSApp.terminate(nil) }
     func applicationWillTerminate(_ notification: Notification) {
-        captureTask?.cancel()
         model.stopCapture()
-        hotKey?.stop()
         model.cancel()
     }
 }
