@@ -11,6 +11,8 @@ The mode menu contains only Stealth and Helpful. An adjacent information button 
 
 Settings is a separate window with General, Prompts, Models and Skills tabs. Onboarding is not reused for settings. The main review and Helpful panel prioritize the prompt and model recommendation. Instructional footers, generic model explanations and raw warning paragraphs have been removed. A short source badge still distinguishes offline results from live search; errors remain visible.
 
+**Settings → General → Show onboarding again** reopens the welcome and permission setup without resetting preferences. Capture pauses while the welcome window is open and resumes when it is completed or closed.
+
 The review shows only a single line from the beginning of the captured prompt, truncated with an ellipsis. It is plain read-only text without an input background or separate heading. Users compose their prompt in the AI application. The full captured text is still used for analysis. Captured prompts remain read-only. **Your next task** adds project-aware suggestions and Copy prompt. **Use draft** or editing chat context pauses capture for the session and reveals **Review draft**, where the draft can be edited, copied, or replaced by resuming live capture. The host comes from the captured app; there is no host-app picker.
 
 ## Models and effort

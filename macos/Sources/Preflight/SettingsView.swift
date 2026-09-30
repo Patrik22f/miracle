@@ -8,6 +8,7 @@ struct SettingsView: View {
     let changed: () -> Void
     let demo: () -> Void
     let endDemo: () -> Void
+    let showOnboarding: () -> Void
     @State private var page = Page.general
     enum Page: String, CaseIterable { case general = "General", prompts = "Prompts", models = "Models", skills = "Skills" }
 
@@ -28,6 +29,9 @@ struct SettingsView: View {
                             if settings.permissionGranted { Label("Enabled", systemImage: "checkmark.circle.fill").foregroundStyle(.green) }
                             else { Button("Enable…", action: AccessibilityPermission.request) }
                         }
+                    }
+                    Section("Setup") {
+                        Button("Show onboarding again", action: showOnboarding)
                     }
                     Section {
                         Toggle("Demo mode", isOn: Binding(get: { model.demoMode }, set: { enabled in
