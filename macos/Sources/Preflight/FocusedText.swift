@@ -80,11 +80,13 @@ actor FocusedTextReader: FocusedTextReading {
                                              subrole: subrole ?? "", label: label)
         let bounds = fieldBounds(focused)
         let context = automatic ? conversationContext(around: focused, source: source) : nil
+        let window = automatic ? elementAttribute(app, kAXFocusedWindowAttribute) : nil
+        let projectPath = ProjectDirectory.resolve(document: window.flatMap { attribute($0, kAXDocumentAttribute) as? String })
         guard let current = elementAttribute(app, kAXFocusedUIElementAttribute), CFEqual(focused, current) else {
             return .status(.waiting)
         }
         return .captured(CapturedPrompt(text: captured.text, source: source, fieldID: fieldID,
-                                        bounds: bounds, supportsAutomaticRecommendations: automatic, context: context))
+                                        bounds: bounds, supportsAutomaticRecommendations: automatic, context: context, projectPath: projectPath))
     }
 
     private func conversationContext(around focused: AXUIElement, source: PromptSource) -> ConversationContext? {

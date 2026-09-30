@@ -11,7 +11,7 @@ struct SetupView: View {
             HStack(spacing: 12) {
                 Image(systemName: "sparkle").font(.largeTitle).foregroundStyle(.tint)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Welcome to Preflight")
+                    Text("Welcome to Zázrak")
                         .font(.title2.bold())
                 }
             }
@@ -57,7 +57,7 @@ struct SetupView: View {
             Divider()
             HStack {
                 Spacer()
-                Button("Start using Preflight", action: complete)
+                Button("Start using Zázrak", action: complete)
                     .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
             }
         }

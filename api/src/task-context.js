@@ -101,11 +101,20 @@ export function resolveTask(prompt, context) {
   const used = selected.length > 0;
   const status = used ? 'used' : wantsContext ? 'missing' : messages.length ? 'not-needed' : 'unavailable';
   const complexityText = `${current}\n${used ? historical : ''}`;
+  const risks = [
+    [/\barchitect\w*\b/i, 'architecture decisions'],
+    [/\bmigrat\w*\b/i, 'migration and compatibility'],
+    [/\b(?:distributed|multi[- ]tenant|race condition|data race)\b/i, 'cross-system or concurrency risks'],
+    [/\b(?:enterprise|production[- ]ready)\b/i, 'production readiness'],
+    [/\b(?:security audit|vulnerabilit\w*|credential\w*|encrypt\w*|data loss)\b/i, 'security or data integrity'],
+    [/\brefactor\w*[\s\S]{0,40}(?:entire|whole|cele)\b/i, 'broad refactoring'],
+  ].filter(([pattern]) => pattern.test(complexityText)).map(([, label]) => label);
+  if (task.purposes.includes('authentication') && task.purposes.includes('payments')) risks.push('authentication and payments together');
+  if (task.purposes.length >= 3) risks.push('multiple interacting concerns');
   let level = 'low', reason = 'A small, self-contained task needs little investigation.';
-  if (narrows) { level = 'low'; reason = 'The latest request narrows the work to a small, explicit edit.'; }
-  else if (/\b(?:architect\w*|migration|migrat\w*|distributed|race condition|data race|enterprise|production[- ]ready|multi[- ]tenant|refactor\w*[\s\S]{0,40}(?:entire|whole|cele))\b/i.test(complexityText)
-    || (task.purposes.includes('authentication') && task.purposes.includes('payments')) || task.purposes.length >= 3) {
-    level = 'high'; reason = used ? 'The chat describes a complex task; this short prompt continues that work.' : 'This task spans architecture, coordinated changes, or multiple interacting concerns.';
+  if (narrows && !risks.length) { level = 'low'; reason = 'The latest request narrows the work to a small, explicit edit.'; }
+  else if (risks.length) {
+    level = 'high'; reason = `High effort for ${risks.slice(0, 3).join(', ')}.${used ? ' Includes the active task from chat context.' : ''}`;
   } else if (continues && !used) {
     level = 'medium'; reason = 'This refers to earlier work, but its chat context is unavailable. Effort is provisional.';
   } else if (used || task.scopes.length || task.purposes.length || software.test(current) || current.length > 600) {

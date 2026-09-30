@@ -123,3 +123,76 @@ struct IntegrationTests {
         #expect(await reader.calls == 0)
     }
 }
+
+@MainActor @Suite("Automatic recommendation regressions")
+struct AutomaticRecommendationRegressionTests {
+    @Test("Manual edits and pastes analyze the settled prompt without an Analyze click")
+    func manualDebounce() async throws {
+        let recorder = RecommendationRequestRecorder()
+        let model = AppModel { text, host, context in try await recorder.analyze(text, host, context) }
+        model.editPrompt("First draft")
+        let first = model.task
+        model.editPrompt("Pasted final draft")
+        await first?.value
+        await model.task?.value
+        #expect(await recorder.prompts == ["Pasted final draft"])
+        #expect(model.result != nil)
+        #expect(!model.liveCaptureEnabled)
+        model.editPrompt("")
+        #expect(model.result == nil)
+        #expect(!model.isLoading)
+    }
+
+    @Test("Target changes and context edits automatically reanalyze with the correct host")
+    func hostAndContext() async throws {
+        let recorder = RecommendationRequestRecorder()
+        let model = AppModel { text, host, context in try await recorder.analyze(text, host, context) }
+        model.editPrompt("Continue")
+        await model.task?.value
+        model.targetApp = .codex
+        model.editContext("Migrate Swift concurrency and actor isolation")
+        await model.task?.value
+        #expect(await recorder.hosts == ["Cursor", "Codex"])
+        #expect(await recorder.contexts.last??.text == "Migrate Swift concurrency and actor isolation")
+    }
+
+    @Test("Pausing cancels a pending manual analysis and resume analyzes the existing draft")
+    func pauseResume() async throws {
+        let recorder = RecommendationRequestRecorder()
+        let model = AppModel { text, host, context in try await recorder.analyze(text, host, context) }
+        model.editPrompt("Analyze this draft")
+        let pending = model.task
+        model.setAutomaticRecommendationsEnabled(false)
+        await pending?.value
+        #expect(await recorder.prompts.isEmpty)
+        #expect(!model.isLoading)
+        model.setAutomaticRecommendationsEnabled(true)
+        await model.task?.value
+        #expect(await recorder.prompts == ["Analyze this draft"])
+    }
+
+    @Test("Switching hosts with the same prompt changes the request host")
+    func switchHost() async throws {
+        let recorder = RecommendationRequestRecorder()
+        let model = AppModel { text, host, context in try await recorder.analyze(text, host, context) }
+        var captured = CapturedPrompt.cursorFixture()
+        model.receiveCapture(.captured(captured))
+        await model.task?.value
+        captured = CapturedPrompt(text: captured.text, source: .init(processID: 555, bundleIdentifier: "com.openai.codex", name: "Codex"),
+                                  fieldID: UUID(), supportsAutomaticRecommendations: true)
+        model.receiveCapture(.captured(captured))
+        await model.task?.value
+        #expect(model.targetApp == .codex)
+        #expect(await recorder.hosts == ["Cursor", "Codex"])
+    }
+}
+
+private actor RecommendationRequestRecorder {
+    var prompts: [String] = []
+    var hosts: [String?] = []
+    var contexts: [ConversationContext?] = []
+    func analyze(_ text: String, _ host: String?, _ context: ConversationContext?) throws -> AnalyzeResponse {
+        prompts.append(text); hosts.append(host); contexts.append(context)
+        return try .demo()
+    }
+}

@@ -33,6 +33,20 @@ export function createSkillsAPI({ tokenProvider = () => process.env.VERCEL_OIDC_
     }));
   }
   return {
+    async search(query, { owner, limit = 20 } = {}) {
+      if (typeof query !== 'string' || query.trim().length < 2 || query.length > 200) throw new Error('Search query must contain 2–200 characters');
+      if (owner !== undefined && (typeof owner !== 'string' || !segmentPattern.test(owner))) throw new Error('Invalid search owner');
+      if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new Error('Invalid search limit');
+      const params = new URLSearchParams({ q: query.trim(), limit: String(limit) });
+      if (owner) params.set('owner', owner);
+      const response = await request(`/search?${params}`);
+      if (!Array.isArray(response.data)) throw new Error('Invalid search response');
+      // Remote URLs and display names are not used as identities or fetch targets.
+      return [...new Set(response.data.filter(row => row && !row.isDuplicate && validID(row.id)
+        && row.source === row.id.split('/').slice(0, 2).join('/')
+        && (!owner || row.source.split('/')[0].toLowerCase() === owner.toLowerCase()))
+        .map(row => row.id))].slice(0, limit);
+    },
     async curatedIDs() {
       const response = await request('/curated');
       if (!Array.isArray(response.data)) throw new Error('Invalid curated response');
@@ -62,7 +76,10 @@ export function createSkillsAPI({ tokenProvider = () => process.env.VERCEL_OIDC_
   };
 }
 
-export async function syncSkillsAPI({ api = createSkillsAPI(), discover = false, previous, makeRecord } = {}) {
+export async function syncSkillsAPI({ api = createSkillsAPI(), discover = false, searchQueries = [], searchOwner, previous, makeRecord } = {}) {
+  if (!Array.isArray(searchQueries) || searchQueries.length > 5
+    || searchQueries.some(query => typeof query !== 'string' || query.trim().length < 2 || query.length > 200)) throw new Error('Use at most five search queries of 2–200 characters');
+  if (searchOwner !== undefined && (typeof searchOwner !== 'string' || !segmentPattern.test(searchOwner))) throw new Error('Invalid search owner');
   let ids = apiSeeds; const warnings = [];
   if (discover) {
     try { ids = [...new Set([...apiSeeds, ...await api.curatedIDs()])].slice(0, 30); }
@@ -71,6 +88,16 @@ export async function syncSkillsAPI({ api = createSkillsAPI(), discover = false,
         .filter(id => validID(id) && allowedSources.has(id.split('/').slice(0, 2).join('/')))])].slice(0, 30);
       warnings.push('Curated Skills API discovery failed; retaining the previously configured candidate set.');
     }
+  }
+  if (searchQueries.length) {
+    const results = await Promise.allSettled(searchQueries.map(query => api.search(query, { owner: searchOwner, limit: 20 })));
+    const discovered = results.flatMap(result => result.status === 'fulfilled' ? result.value : []);
+    if (results.some(result => result.status === 'rejected')) {
+      discovered.push(...(previous?.skills ?? []).map(skill => skill.apiId).filter(id => validID(id)
+        && (!searchOwner || id.split('/')[0].toLowerCase() === searchOwner.toLowerCase())));
+      warnings.push('Some Skills API searches failed; retaining previously imported candidates within the import limit.');
+    }
+    ids = [...new Set([...apiSeeds, ...discovered, ...ids])].slice(0, 30);
   }
   const skills = []; let cursor = 0;
   const started = performance.now();

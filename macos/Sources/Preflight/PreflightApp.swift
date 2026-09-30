@@ -19,7 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         NSApp.setActivationPolicy(.accessory)
         installMainMenu()
         let item = NSStatusBar.system.statusItem(withLength: 34)
-        item.button?.image = NSImage(systemSymbolName: "sparkle", accessibilityDescription: "Preflight")
+        item.button?.image = NSImage(systemSymbolName: "sparkle", accessibilityDescription: "Zázrak")
         item.button?.target = self
         item.button?.action = #selector(statusClicked)
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
@@ -46,12 +46,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     private func installMainMenu() {
         let mainMenu = NSMenu()
         let application = NSMenuItem()
-        let applicationMenu = NSMenu(title: "Preflight")
+        let applicationMenu = NSMenu(title: "Zázrak")
         application.submenu = applicationMenu
         let settingsItem = add("Settings…", action: #selector(showSettings), to: applicationMenu)
         settingsItem.keyEquivalent = ","
         applicationMenu.addItem(.separator())
-        let quitItem = add("Quit Preflight", action: #selector(quit), to: applicationMenu)
+        let quitItem = add("Quit Zázrak", action: #selector(quit), to: applicationMenu)
         quitItem.keyEquivalent = "q"
         mainMenu.addItem(application)
         let edit = NSMenuItem()
@@ -92,7 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
 
     private func showMenu() {
         let menu = NSMenu()
-        add("Open Preflight", action: #selector(showReview), to: menu)
+        add("Open Zázrak", action: #selector(showReview), to: menu)
         menu.addItem(.separator())
         let modeItem = NSMenuItem(title: "Display mode", action: nil, keyEquivalent: "")
         let modes = NSMenu(title: "Display mode")
@@ -110,7 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         add("Settings…", action: #selector(showSettings), to: menu)
         add("Try demo", action: #selector(demo), to: menu)
         menu.addItem(.separator())
-        add("Quit Preflight", action: #selector(quit), to: menu)
+        add("Quit Zázrak", action: #selector(quit), to: menu)
         guard let button = statusItem?.button else { return }
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.minY), in: button)
     }
@@ -132,7 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         model.setCaptureSuspended(true)
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 610, height: 500), styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
-        window.title = "Welcome to Preflight"
+        window.title = "Welcome to Zázrak"
         window.delegate = self
         setupWindow = window
         window.contentView = NSHostingView(rootView: SetupView(settings: settings, complete: { [weak self] in
@@ -155,7 +155,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         if let settingsWindow { settingsWindow.makeKeyAndOrderFront(nil); return }
         model.setCaptureSuspended(true)
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 540, height: 550), styleMask: [.titled, .closable], backing: .buffered, defer: false)
-        window.title = "Preflight Settings"
+        window.title = "Zázrak Settings"
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.contentView = NSHostingView(rootView: SettingsView(settings: settings, model: model, catalog: catalog,
@@ -177,6 +177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     }
 
     private func refreshPresentation() {
+        if catalog.needsRefresh { Task { await catalog.refresh() } }
         settings.monitoringStatus = model.captureStatus.description
         if model.hasUnreadRecommendation && popover.isShown {
             model.markRead()
@@ -185,11 +186,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         badge.isHidden = !model.hasUnreadRecommendation
         badge.color = model.hasError ? .systemOrange : .controlAccentColor
         let state = model.isLoading ? "Analyzing prompt" : model.hasUnreadRecommendation ? (model.hasError ? "Analysis needs attention" : "New recommendations") : "Ready"
-        statusItem?.button?.toolTip = "Preflight · \(settings.mode.title) · \(state)"
-        statusItem?.button?.setAccessibilityLabel("Preflight, \(settings.mode.title), \(state)")
+        statusItem?.button?.toolTip = "Zázrak · \(settings.mode.title) · \(state)"
+        statusItem?.button?.setAccessibilityLabel("Zázrak, \(settings.mode.title), \(state)")
         guard settings.mode == .helpful, !model.helpfulDismissed, !popover.isShown,
               settingsWindow?.isVisible != true, setupWindow?.isVisible != true,
-              model.result != nil || model.hasError,
+              model.result != nil || model.hasError || model.suggestions.response?.status == "ready",
               let snapshot = model.activeSnapshot,
               NSWorkspace.shared.frontmostApplication?.processIdentifier == snapshot.processID,
               let bounds = snapshot.bounds, let primary = NSScreen.screens.first else {
@@ -201,7 +202,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
               screen.frame.intersects(anchor) else { helpfulPanel?.orderOut(nil); return }
         if helpfulPanel == nil {
             let window = RecommendationPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-            window.title = "Preflight Recommendations"
+            window.title = "Zázrak Recommendations"
             window.isFloatingPanel = true
             window.level = .floating
             window.hidesOnDeactivate = false
@@ -214,7 +215,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             window.contentView = NSHostingView(rootView: HelpfulView(model: model, settings: settings, catalog: catalog, installer: installer, dismiss: { [weak self] in self?.model.dismissHelpful() }, review: { [weak self] in self?.showReview() }))
             helpfulPanel = window
         }
-        let height = model.hasError ? 180.0 : min(480, 300 + Double(model.result?.skills.count ?? 0) * 64)
+        let height = model.hasError ? 180.0 : min(560, 300 + Double(model.result?.skills.count ?? 0) * 64 + (model.suggestions.response?.status == "ready" ? 240 : 0))
         helpfulPanel?.setFrame(PanelPlacement.frame(above: anchor, size: CGSize(width: 420, height: height), visibleFrame: screen.visibleFrame.insetBy(dx: 8, dy: 8)), display: true)
         // orderFront leaves the host's prompt as the key input. Never activate here.
         helpfulPanel?.orderFrontRegardless()

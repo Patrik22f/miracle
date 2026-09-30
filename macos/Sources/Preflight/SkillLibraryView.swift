@@ -8,19 +8,29 @@ struct SkillLibraryView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var library: SkillLibrary?
     @State private var query = ""
+    @State private var provenance = ""
+    @State private var source = ""
+    @State private var scope = ""
+    @State private var purpose = ""
     @State private var isLoading = false
     @State private var error: String?
     @State private var importRevision = 0
 
     private var filteredSkills: [SkillLibrary.Entry] {
         guard let library else { return [] }
-        guard !query.isEmpty else { return library.skills }
-        return library.skills.filter {
-            "\($0.name) \($0.description) \($0.source)".localizedCaseInsensitiveContains(query)
+        let terms = query.split(whereSeparator: \.isWhitespace).map(String.init)
+        return library.skills.filter { skill in
+            let text = "\(skill.name) \(skill.description) \(skill.source) \((skill.scopes + skill.purposes).joined(separator: " "))"
+            return (provenance.isEmpty || skill.provenance == provenance)
+                && (source.isEmpty || skill.source == source)
+                && (scope.isEmpty || skill.scopes.contains(scope))
+                && (purpose.isEmpty || skill.purposes.contains(purpose))
+                && terms.allSatisfy { text.localizedCaseInsensitiveContains($0) }
         }
     }
 
     var body: some View {
+        let visibleSkills = filteredSkills
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("Skill library").font(.title2.bold())
@@ -38,8 +48,39 @@ struct SkillLibraryView: View {
             }
             TextField("Search imported skills", text: $query)
                 .textFieldStyle(.roundedBorder)
+            HStack {
+                Picker("Availability", selection: $provenance) {
+                    Text("All").tag("")
+                    Text("Installed").tag("installed")
+                    Text("Public").tag("public-import")
+                }
+                Picker("Source", selection: $source) {
+                    Text("All sources").tag("")
+                    ForEach(Array(Set(library?.skills.map(\.source) ?? [])).sorted(), id: \.self) { Text($0).tag($0) }
+                }
+            }
+            HStack {
+                Picker("Platform", selection: $scope) {
+                    Text("All platforms").tag("")
+                    ForEach(Array(Set(library?.skills.flatMap(\.scopes) ?? [])).sorted(), id: \.self) { Text($0).tag($0) }
+                }
+                Picker("Purpose", selection: $purpose) {
+                    Text("All purposes").tag("")
+                    ForEach(Array(Set(library?.skills.flatMap(\.purposes) ?? [])).sorted(), id: \.self) { Text($0).tag($0) }
+                }
+            }
+            HStack {
+                Text("\(visibleSkills.count) matching skills").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button("Clear filters") { query = ""; provenance = ""; source = ""; scope = ""; purpose = "" }
+                    .controlSize(.small)
+                    .disabled(query.isEmpty && provenance.isEmpty && source.isEmpty && scope.isEmpty && purpose.isEmpty)
+            }
             if let error { Text(error).font(.callout).foregroundStyle(.secondary) }
-            List(filteredSkills) { skill in
+            if let warning = library?.warnings.first {
+                Text(warning).font(.caption).foregroundStyle(.secondary).lineLimit(3)
+            }
+            List(visibleSkills) { skill in
                 VStack(alignment: .leading, spacing: 5) {
                     HStack {
                         Text(skill.name).font(.headline)
@@ -57,6 +98,11 @@ struct SkillLibraryView: View {
                         SkillInstallButton(skill: InstallableSkill(skill), host: host, settings: settings, installer: installer, openSettings: openSettings)
                     }
                 }.padding(.vertical, 5)
+            }.overlay {
+                if library != nil && visibleSkills.isEmpty && !isLoading {
+                    ContentUnavailableView("No matching skills", systemImage: "magnifyingglass",
+                        description: Text("Clear filters or refresh imports to update your library."))
+                }
             }
         }
         .padding(20)

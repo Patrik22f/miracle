@@ -1,21 +1,24 @@
 import http from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { analyze } from './analyze.js';
-import { createLibraryStore, importSkills, saveLibrary, librarySummary } from './skill-library.js';
+import { createLibraryStore, createLocalLibraryStore, importSkills, saveLibrary, librarySummary } from './skill-library.js';
 import { validateContext } from './task-context.js';
+import { validateSkillFilters } from './skill-filters.js';
+import { createSuggestionService, validateSuggestionRequest } from './prompt-suggestions.js';
 
 export function validateRequest(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return 'Expected a JSON object.';
-  if (Object.keys(value).some(k => !['prompt', 'app', 'maxSkills', 'context'].includes(k))) return 'Unknown request field.';
+  if (Object.keys(value).some(k => !['prompt', 'app', 'maxSkills', 'context', 'filters'].includes(k))) return 'Unknown request field.';
   if (typeof value.prompt !== 'string' || !value.prompt.trim() || value.prompt.length > 12000) return 'Prompt must contain 1–12000 characters.';
   if (value.app !== undefined && (typeof value.app !== 'string' || value.app.length > 200)) return 'App must be a string of at most 200 characters.';
-  if (value.maxSkills !== undefined && (!Number.isInteger(value.maxSkills) || value.maxSkills < 0 || value.maxSkills > 3)) return 'maxSkills must be 0–3.';
-  return validateContext(value.context);
+  if (value.maxSkills !== undefined && (!Number.isInteger(value.maxSkills) || value.maxSkills < 0 || value.maxSkills > 8)) return 'maxSkills must be 0–8.';
+  return validateSkillFilters(value.filters) || validateContext(value.context);
 }
 
 export function createServer(options = {}) {
   let importing;
-  const store = createLibraryStore(options.libraryPath);
+  const suggest = createSuggestionService(options.suggestions);
+  const store = options.libraryPath ? createLibraryStore(options.libraryPath) : createLocalLibraryStore();
   const currentLibrary = () => options.library ? Promise.resolve(options.library) : store();
   return http.createServer({ requestTimeout: 10000, headersTimeout: 10000 }, async (req, res) => {
     const json = (status, payload) => {
@@ -26,8 +29,12 @@ export function createServer(options = {}) {
     // Native-only local API: reject browser origins before reading any prompt.
     if (req.headers.origin || !/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(req.headers.host ?? '')) return fail(403, 'FORBIDDEN', 'Use the native client or local CLI.');
     if (req.method === 'GET' && req.url === '/health') return json(200, { status: 'ok', schemaVersion: '1.0', mode: options.mode ?? 'knowledge', contextAware: (options.mode ?? 'knowledge') === 'knowledge' });
-    if (req.method === 'GET' && req.url === '/skills') {
-      try { return json(200, librarySummary(await currentLibrary())); }
+    if (req.method === 'GET' && (req.url === '/skills' || req.url.startsWith('/skills?'))) {
+      const params = new URL(req.url, 'http://localhost').searchParams;
+      const filters = Object.fromEntries(params);
+      const error = validateSkillFilters(filters);
+      if (error || [...params.keys()].some(key => params.getAll(key).length > 1)) return fail(400, 'INVALID_REQUEST', error ?? 'Repeated skill filter.');
+      try { return json(200, librarySummary(await currentLibrary(), filters)); }
       catch { return fail(500, 'LIBRARY_ERROR', 'Could not read the skill library. Run npm run skills:import.'); }
     }
     if (req.method === 'POST' && req.url === '/skills/import') {
@@ -46,14 +53,15 @@ export function createServer(options = {}) {
       if (!importing) importing = (async () => {
         const previous = await currentLibrary();
         const library = await importSkills({ roots: previous.roots, includePublic: previous.includePublic,
-          publicProvider: previous.publicProvider, discover: previous.discover, previous });
+          publicProvider: previous.publicProvider, discover: previous.discover,
+          searchQueries: previous.searchQueries, searchOwner: previous.searchOwner, previous });
         await saveLibrary(library, options.libraryPath);
         return library;
       })().finally(() => { importing = null; });
       try { return json(200, librarySummary(await importing)); }
       catch { return fail(500, 'IMPORT_ERROR', 'Skill import failed. Run npm run skills:import to inspect it.'); }
     }
-    if (req.method !== 'POST' || req.url !== '/analyze') return fail(404, 'NOT_FOUND', 'Use POST /analyze.');
+    if (req.method !== 'POST' || !['/analyze', '/suggestions'].includes(req.url)) return fail(404, 'NOT_FOUND', 'Use POST /analyze or /suggestions.');
     if (!(req.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) return fail(415, 'CONTENT_TYPE', 'Use application/json.');
     try {
       const chunks = [];
@@ -66,8 +74,12 @@ export function createServer(options = {}) {
       let payload;
       try { payload = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
       catch { return fail(400, 'INVALID_JSON', 'Body must be valid JSON.'); }
-      const error = validateRequest(payload);
+      const error = req.url === '/suggestions' ? validateSuggestionRequest(payload) : validateRequest(payload);
       if (error) return fail(400, 'INVALID_REQUEST', error);
+      if (req.url === '/suggestions') {
+        try { return json(200, await suggest(payload)); }
+        catch { return fail(422, 'PROJECT_UNAVAILABLE', 'Could not read this project. Choose an accessible project folder.'); }
+      }
       const mode = options.mode ?? 'knowledge';
       const library = ['knowledge', 'hybrid', 'installed'].includes(mode) ? await currentLibrary() : options.library;
       json(200, await analyze({ ...payload, prompt: payload.prompt.trim() }, { ...options, mode, library }));

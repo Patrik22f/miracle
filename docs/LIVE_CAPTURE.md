@@ -2,7 +2,7 @@
 
 Current UI: open the review from the menu bar; there is no registered global capture shortcut or separate review window. The capture/selection methods and their historical verification below remain implementation history. Recognized Cursor and Codex prompts now use a 300 ms analysis debounce, and chat context travels with each capture as described in [CHAT_CONTEXT.md](CHAT_CONTEXT.md).
 
-With Accessibility permission and Live capture enabled, Preflight follows the focused editable text field in the foreground application. The overlay stays visible without taking focus on each update. Text is held in memory. Recognized Cursor and Codex prompts can trigger analysis after a 300 ms typing pause when automatic recommendations are enabled. Other fields wait for Analyze in the review popover.
+With Accessibility permission and Live capture enabled, Preflight follows the focused editable text field in the foreground application. The overlay stays visible without taking focus on each update. Text is held in memory. Recognized Cursor and Codex prompts can trigger analysis after a 300 ms typing pause when automatic recommendations are enabled. Pasted prompts and manual prompt/context edits in Preflight also trigger automatic analysis. Other captured fields wait for Analyze until edited in the review.
 
 ## Components and ownership
 

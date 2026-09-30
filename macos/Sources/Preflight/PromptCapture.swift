@@ -13,11 +13,12 @@ struct CapturedPrompt: Equatable, Sendable {
     var bounds: CGRect? = nil
     var supportsAutomaticRecommendations = false
     var context: ConversationContext? = nil
+    var projectPath: String? = nil
 
     var automaticSnapshot: PromptSnapshot? {
         guard supportsAutomaticRecommendations, let fieldID else { return nil }
         return PromptSnapshot(text: text, appName: source.name, processID: source.processID,
-                              fieldID: fieldID, bounds: bounds, bundleIdentifier: source.bundleIdentifier, context: context)
+                              fieldID: fieldID, bounds: bounds, bundleIdentifier: source.bundleIdentifier, context: context, projectPath: projectPath)
     }
 }
 

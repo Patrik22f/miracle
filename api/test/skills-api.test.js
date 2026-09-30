@@ -65,3 +65,49 @@ test('Curated outage preserves previously discovered candidates beyond the seed 
     api: { curatedIDs: async () => { throw new Error('Offline'); }, detail: async () => { throw new Error('Offline'); } } });
   assert.ok(library.skills.some(skill => skill.apiId === extraID));
 });
+
+test('Official search encodes filters, discards forks and invalid identities, and ignores untrusted URLs', async () => {
+  const api = createSkillsAPI({ tokenProvider: () => 'test-token', fetchImpl: async (url, options) => {
+    const parsed = new URL(url);
+    assert.equal(parsed.pathname, '/api/v1/skills/search');
+    assert.equal(parsed.searchParams.get('q'), 'PDF reports & forms');
+    assert.equal(parsed.searchParams.get('owner'), 'anthropics');
+    assert.equal(parsed.searchParams.get('limit'), '5');
+    assert.equal(options.headers.Authorization, 'Bearer test-token');
+    return Response.json({ data: [
+      { id, source: 'anthropics/skills', url: 'https://evil.example/private' }, { id, source: 'anthropics/skills' },
+      { id: 'anthropics/skills/fork', source: 'anthropics/skills', isDuplicate: true },
+      { id: 'other/skills/pdf', source: 'other/skills' }, { id, source: 'wrong/repo' },
+      { id: 'anthropics/skills/../bad', source: 'anthropics/skills' }, null,
+    ] });
+  } });
+  assert.deepEqual(await api.search('PDF reports & forms', { owner: 'anthropics', limit: 5 }), [id]);
+  await assert.rejects(api.search('x'), /query/);
+  await assert.rejects(api.search('pdf', { owner: '../bad' }), /owner/);
+  await assert.rejects(api.search('pdf', { limit: 201 }), /limit/);
+  await assert.rejects(apiWith({ skills: [] }).search('pdf'), /Invalid search response/);
+  assert.deepEqual(await apiWith({ data: [] }).search('pdf'), []);
+});
+
+test('Topic import fetches complete content, persists configuration, and keeps snapshots on search outages', async () => {
+  const extraID = 'example/skills/pdf-reports';
+  const api = {
+    async search(query, options) { assert.equal(query, 'pdf reports'); assert.equal(options.owner, 'example'); return [extraID]; },
+    async detail(skillID) { return { ...detail, id: skillID, source: skillID.split('/').slice(0, 2).join('/'),
+      content: content.replace('name: pdf', `name: ${skillID.split('/').at(-1)}`) }; },
+  };
+  const config = { roots: [], publicProvider: 'skills-api', searchQueries: ['pdf reports'], searchOwner: 'example' };
+  const library = await importSkills({ ...config, api });
+  assert.deepEqual(library.searchQueries, ['pdf reports']);
+  assert.equal(library.searchOwner, 'example');
+  const extra = library.skills.find(skill => skill.apiId === extraID);
+  assert.ok(extra.study.valid);
+  assert.equal(extra.files[0].path, 'SKILL.md');
+  const outage = await importSkills({ ...config, previous: library, api: {
+    search: async () => { throw new Error('secret-token'); }, detail: async () => { throw new Error('secret-token'); },
+  } });
+  assert.deepEqual(outage.skills.find(skill => skill.apiId === extraID), extra);
+  assert.match(outage.warnings[0], /searches failed/);
+  assert.ok(!JSON.stringify(outage).includes('secret-token'));
+  await assert.rejects(importSkills({ ...config, searchQueries: Array(6).fill('pdf'), api }), /five/);
+});

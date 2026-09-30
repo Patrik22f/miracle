@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "1.0",
+  "status": "ready",
+  "provider": "groq",
+  "model": "openai/gpt-oss-120b",
+  "retryAfterMs": 0,
+  "cached": false,
+  "generatedAt": "2026-09-30T10:00:00.000Z",
+  "summary": "A task tracker with an in-memory task list.",
+  "project": {
+    "name": "task-tracker",
+    "path": "/example/task-tracker",
+    "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "scannedAt": "2026-09-30T10:00:00.000Z",
+    "fileCount": 4,
+    "sampledFileCount": 4,
+    "partial": false
+  },
+  "suggestions": [
+    {
+      "id": "1111111111111111",
+      "title": "Save tasks between launches",
+      "prompt": "Persist tasks so they survive relaunch. Verify that adding and completing tasks still works after reopening the app.",
+      "reason": "Tasks currently live only in memory.",
+      "files": [
+        "src/tasks.ts"
+      ]
+    },
+    {
+      "id": "2222222222222222",
+      "title": "Filter completed tasks",
+      "prompt": "Add a filter for open and completed tasks. Keep the filter selection when navigating away and back.",
+      "reason": "The list currently shows all tasks together.",
+      "files": [
+        "src/tasks.ts"
+      ]
+    },
+    {
+      "id": "3333333333333333",
+      "title": "Handle an empty task list",
+      "prompt": "Add a helpful empty state with a clear action to create the first task. Check the initial state and the state after deleting the final task.",
+      "reason": "The list returns an empty array without a dedicated state.",
+      "files": [
+        "src/tasks.ts"
+      ]
+    }
+  ]
+}

@@ -4,7 +4,7 @@ import Foundation
 struct AnalyzeRequest: Codable, Sendable {
     let prompt: String
     let app: String?
-    var maxSkills = 3
+    var maxSkills = 6
     var context: ConversationContext? = nil
 }
 
@@ -16,6 +16,11 @@ struct AnalyzeResponse: Codable, Sendable {
     let model: Model
     let skills: [Skill]
     let meta: Metadata
+
+    var bestSkill: Skill? {
+        if let id = meta.bestSkillId { return skills.first { $0.id == id } }
+        return skills.first
+    }
 
     struct Analysis: Codable, Sendable {
         let intent: String
@@ -37,6 +42,7 @@ struct AnalyzeResponse: Codable, Sendable {
         let durationMs: Int
         let warnings: [String]
         var importedCount: Int? = nil
+        var bestSkillId: String? = nil
     }
     struct Skill: Codable, Identifiable, Sendable {
         let id: String

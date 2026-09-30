@@ -37,26 +37,34 @@ struct HelpfulView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Preflight", systemImage: "sparkle").font(.headline)
+                Label("Zázrak", systemImage: "sparkle").font(.headline)
                 Spacer()
                 if model.demoMode { Text("Demo").font(.caption).foregroundStyle(.secondary) }
                 Button(action: dismiss) { Image(systemName: "xmark") }
                     .buttonStyle(.plain).accessibilityLabel("Dismiss recommendation")
             }
-            if let result = model.result {
+            if model.result != nil || model.suggestions.response?.status == "ready" {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
-                        ModelRecommendationView(result: result, host: model.targetApp, settings: settings, catalog: catalog, compact: true)
-                        Text(result.contextLabel).font(.caption).foregroundStyle(.secondary)
-                        if result.skills.isEmpty {
-                            Text(result.emptySkillsLabel).font(.callout).foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                        if !model.demoMode, model.suggestions.response?.status == "ready" {
+                            PromptSuggestionsView(suggestions: model.suggestions, compact: true) { suggestion in
+                                model.useSuggestion(suggestion)
+                                review()
+                            }
                         }
-                        if result.analysis.context?.status == "missing" {
-                            Button("Add context", action: review).buttonStyle(.borderless)
-                        }
-                        ForEach(result.skills) { skill in
-                            RecommendedSkillRow(skill: skill, model: model, settings: settings, installer: installer, compact: true)
+                        if let result = model.result {
+                            ModelRecommendationView(result: result, host: model.targetApp, settings: settings, catalog: catalog, compact: true)
+                            Text(result.contextLabel).font(.caption).foregroundStyle(.secondary)
+                            if result.skills.isEmpty {
+                                Text(result.emptySkillsLabel).font(.callout).foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            if result.analysis.context?.status == "missing" {
+                                Button("Add context", action: review).buttonStyle(.borderless)
+                            }
+                            ForEach(result.skills) { skill in
+                                RecommendedSkillRow(skill: skill, model: model, settings: settings, installer: installer, compact: true)
+                            }
                         }
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }

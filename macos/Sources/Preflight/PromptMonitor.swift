@@ -9,9 +9,10 @@ struct PromptSnapshot: Equatable, Sendable {
     let bounds: CGRect?
     var bundleIdentifier: String? = nil
     var context: ConversationContext? = nil
+    var projectPath: String? = nil
 
     func matchesContent(of other: Self) -> Bool {
-        text == other.text && processID == other.processID && fieldID == other.fieldID && context == other.context
+        text == other.text && processID == other.processID && fieldID == other.fieldID && bundleIdentifier == other.bundleIdentifier && context == other.context && projectPath == other.projectPath
     }
 }
 
@@ -24,6 +25,9 @@ enum PromptPolicy {
         let label = label.lowercased()
         if ["search", "terminal", "find", "filename", "file name", "editor content", "code editor"].contains(where: label.contains) { return false }
         // IDE code editors expose the same AX role as chat. Require a prompt label there.
-        return label.range(of: #"\b(prompt|chat input|message input|message codex|ask codex|ask anything|ask a question|send a message|follow[- ]up|instructions)\b"#, options: .regularExpression) != nil
+        if label.range(of: #"\b(prompt|chat|message|ask|follow[- ]up|instructions|describe|what (?:would|can)|build anything)\b"#, options: .regularExpression) != nil { return true }
+        // Codex's main composer can expose an unlabeled editable text area.
+        // Cursor's unlabeled areas may be source editors, so require a label there.
+        return bundleID == "com.openai.codex" && role == kAXTextAreaRole && label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }

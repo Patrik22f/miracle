@@ -38,11 +38,11 @@ struct ModelRecommendationView: View {
     @State private var chosenEffort: String?
 
     private var models: [RecommendedModel] { settings.availableModels(for: host, catalog: catalog) }
-    private var recommendation: RecommendedModel? { ModelRecommendation.choose(from: models, profile: result.model.profile) }
+    private var recommendation: RecommendedModel? { ModelRecommendation.choose(from: models, profile: result.model.profile, requestedEffort: result.effort.level) }
     private var chosen: RecommendedModel? { models.first { $0.id == chosenModelID } ?? recommendation }
     private var efforts: [String] {
         guard let chosen else { return [] }
-        if host == .cursor, !settings.cursorCustomEffort {
+        if host == .cursor, !(settings.detectCursorModels && catalog.cursorDetected), !settings.cursorCustomEffort {
             return chosen.id.hasPrefix("grok-") ? ["medium"] : []
         }
         return chosen.efforts
@@ -93,6 +93,16 @@ struct ModelRecommendationView: View {
                             Text(effort.capitalized).fontWeight(.medium)
                         }.font(.callout)
                     }
+                } else {
+                    Text("Effort is managed by \(host.title) for this model.").font(.caption).foregroundStyle(.secondary)
+                }
+                Text(result.effort.reason).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !compact {
+                    Text(chosenModelID == nil ? ModelRecommendation.reason(for: chosen, profile: result.model.profile, availableCount: models.count) : "You selected this model for \(host.title).")
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(host == .codex ? "Models and effort from Codex’s local catalog" : settings.detectCursorModels && catalog.cursorDetected ? "Models and effort from Cursor’s local settings" : "Models from your manual selection")
+                        .font(.caption2).foregroundStyle(.secondary)
                 }
             } else {
                 Text(host == .cursor ? "Choose available models in Settings" : "Open Codex to load models")
@@ -151,6 +161,10 @@ struct RecommendedSkillRow: View {
                 })) { Text(skill.name).font(.callout.weight(.medium)).lineLimit(2) }.toggleStyle(.checkbox)
                 Spacer(minLength: 8)
                 SkillInstallButton(skill: InstallableSkill(skill), host: model.targetApp, settings: settings, installer: installer, openSettings: openSettings)
+            }
+            if model.result?.bestSkill?.id == skill.id {
+                Label("Best match", systemImage: "star.fill")
+                    .font(.caption.weight(.semibold)).foregroundStyle(.tint)
             }
             if !compact {
                 Text(skill.reason).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)

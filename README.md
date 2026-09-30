@@ -1,12 +1,14 @@
-# Preflight
+# Zázrak (formerly Preflight)
 
-**The right Agent Skills, before you send.**
+**Your next prompt, with the right Agent Skills.**
 
-A native macOS prompt companion: type in a supported app and see the focused field appear automatically in **Your prompt**. Choose **Analyze prompt** to review recommendations from studied local and public skill snapshots. Claude Code can also receive recommendations through its submit hook. Skills are the product; model and effort are secondary advice.
+Zázrak offers three code-aware next-task prompts through Groq, with automatic project refresh, cached responses, and **Use draft / Copy prompt** actions. Choose a project under **Your next task** or **Settings → Prompts** and configure `GROQ_API_KEY` in the local backend `.env`. Selected source excerpts and prompt/chat context are sent to Groq. See [setup, project detection, limits and data flow](docs/PROMPT_SUGGESTIONS.md). Existing executable names, bundle identity and development commands retain `Preflight` for compatibility.
+
+A native macOS prompt companion: type in a supported app and see the focused field appear automatically in **Your prompt**. Recommendations appear automatically after a short typing pause, including for pasted or edited prompts in Preflight. Claude Code can also receive recommendations through its submit hook. Skills are the product; model and effort are secondary advice.
 
 ## Start in two minutes
 
-Requirements: macOS 14+, Xcode 16+ / Swift 6, and Node 22+. No npm packages, API keys, database, or paid services are required.
+Requirements: macOS 14+, Xcode 16+ / Swift 6, and Node 22+. Local skill matching requires no API key. Optional prompt suggestions require a Groq key.
 
 ```sh
 cp .env.example .env
@@ -25,15 +27,35 @@ Left-click the sparkle menu-bar icon to open the review popover; right-click for
 
 On macOS versions that label this permission **Device Control and Data Access**, use that section under Privacy & Security. macOS may require Touch ID or your account password to approve it.
 
-With **Recommend automatically as I write** enabled, recognized Cursor and Codex prompts are analyzed after a 300 ms typing pause. Other captured fields wait for **Analyze**. Pausing automatic recommendations keeps text capture available. Editing the prompt or chat context inside Preflight pauses Live capture for that session so your draft is protected; switch **Live capture** back on to resume. Setup and demo mode suspend capture. Preferences are saved, but prompt text is not. See [presentation modes](macos/README.md).
+With **Recommend automatically as I write** enabled, recognized Cursor and Codex prompts, manual drafts, and pasted prompts are analyzed after a 300 ms typing pause. Other captured fields wait for **Analyze** until you edit them in Preflight. Pausing automatic recommendations keeps text capture available. Editing the prompt or chat context inside Preflight pauses Live capture for that session so your draft is protected; switch **Live capture** back on to resume. Setup and demo mode suspend capture. Preferences are saved, but prompt text is not. See [presentation modes](macos/README.md).
 
 The review opens from the menu bar; the global capture shortcut is no longer registered. If a host does not expose an editable Accessibility field, copy and paste into Preflight instead. See [capture architecture and the host verification checklist](docs/LIVE_CAPTURE.md).
 
-Open **Skill library** to browse or refresh imported installed and public skills. Each recommendation shows its source and match score. Install actions target Cursor or Codex on this Mac or in a project folder chosen in Settings. Matching checks purpose, platform/artifact, prerequisites, description evidence, and available instructions. The default content index returns up to three complementary skills scoring at least 70/100 across 12 criteria, with source hashes and instruction line evidence. See [the import and matching criteria](docs/SKILL_MATCHING.md).
+Open **Skill library** to browse or refresh imported installed and public skills. Each recommendation shows its source and match score. Install actions target Cursor or Codex on this Mac or in a project folder chosen in Settings. Matching checks purpose, platform/artifact, prerequisites, description evidence, and available instructions. The default content index returns up to six complementary skills in the native app scoring at least 70/100 across 12 criteria, with source hashes and instruction line evidence. See [the import and matching criteria](docs/SKILL_MATCHING.md).
 
 Review the skills, select the ones you want, and click **Copy with skills**. Paste back into your AI app, review, and send. Closing the overlay leaves the original input untouched.
 
 For a UI-only demo, choose **Try demo** from the menu-bar menu; no backend is needed. Demo mode always shows the clearly labeled sample response, regardless of the text. Turn Demo mode off for real analysis. The API can also work offline with `SKILLS_MODE=offline npm start`.
+
+## Find the best matching skill
+
+The library supports combined text, availability, source, platform, and purpose filters. Recommendations label the first eligible result **Best match**. **Copy with skills** identifies it when selected and asks the receiving assistant to mention its name and source. The Claude hook does the same. This is the best match under the current ranking in your imported database; an empty result means no skill qualifies.
+
+Query the same database without a server or network access:
+
+```sh
+npm run --silent skills:find -- "Fix Swift Sendable actor isolation." --app Codex --provenance installed
+```
+
+Use `--scope`, `--purpose`, `--source`, `--q`, and `--limit` to narrow results, or `--json` for automation. Repository agents follow this lookup workflow in [AGENTS.md](AGENTS.md).
+
+The existing official skills.sh connection also supports topic and owner discovery:
+
+```sh
+npm run skills:import -- --query "react performance" --owner vercel-labs
+```
+
+This needs `VERCEL_OIDC_TOKEN`, supports up to five `--query` flags, filters upstream duplicates, and imports complete content before ranking. Saved queries are reused by **Refresh imports**. Public imports remain capped at 30 skills; prompts used for local analysis never become upstream search terms. See [matching and filtering](docs/SKILL_MATCHING.md) and the [official API documentation](https://skills.sh/docs/api).
 
 ## What's working
 
@@ -41,7 +63,7 @@ For a UI-only demo, choose **Try demo** from the menu-bar menu; no backend is ne
 - Automatic capture of supported focused editable text inputs, app provenance, persistent pause/resume, secure/read-only field exclusion, and paste fallback.
 - Background AX reads, bounded timeouts, serial sampling, permission recovery, stale-read rejection, and automatic pause for manual editing and demo mode.
 - `POST /analyze` with request validation, bounded input, timeouts, errors, and stable JSON shapes.
-- Content-aware local selection with 12 criteria, versioned profiles, instruction evidence, no prompt-path network, up to three results, and valid abstention.
+- Content-aware local selection with 12 criteria, versioned profiles, instruction evidence, no prompt-path network, up to eight requested results, and valid abstention.
 - Official skills.sh v1 content import with OIDC, bounded allowlisted discovery, four workers, response validation and retained snapshots on failure.
 - Claude Code submit hook, manual-invocation controls and local Claude skill imports.
 - Installed and public `SKILL.md` imports, a searchable library, explicit provenance, and refresh warnings.
@@ -50,6 +72,8 @@ For a UI-only demo, choose **Try demo** from the menu-bar menu; no backend is ne
 - Shared schemas, example request/response, macOS offline fixture, tests, and CI.
 
 ## Two people, two lanes
+
+The backend handoff is on `feature/backend-intelligence`. See the [setup, verified checks and UI integration notes](docs/BACKEND_HANDOFF.md) before combining it with the newer `feature/macos-ui` work.
 
 | Owner | Paths | Branch | First milestone |
 | --- | --- | --- | --- |
@@ -87,7 +111,7 @@ curl -s http://127.0.0.1:8787/analyze \
   --data @contracts/fixtures/analyze-request.json
 ```
 
-Request fields: `prompt` (required, 1–12,000 characters), `app` (optional label), `maxSkills` (optional, 0–3). Response: `schemaVersion`, `requestId`, `analysis`, `effort`, `model`, `skills`, `meta`. See [the API guide](docs/API.md) and [response schema](contracts/analyze-response.schema.json).
+Request fields: `prompt` (required, 1–12,000 characters), `app` (optional label), `maxSkills` (optional, 0–8). Response: `schemaVersion`, `requestId`, `analysis`, `effort`, `model`, `skills`, `meta`. See [the API guide](docs/API.md) and [response schema](contracts/analyze-response.schema.json).
 
 ```sh
 npm test                  # offline backend + HTTP + contract checks
@@ -115,7 +139,7 @@ This version follows the focused editable field through Accessibility; it never 
 
 ## Local data flow
 
-The API binds to `127.0.0.1` and rejects browser origins. Live capture reads the focused editable field in any accessible foreground app, not just AI apps. It skips Preflight itself, secure fields identified by Accessibility, and read-only controls. Captured text stays in memory. Analysis is explicit except for recognized Cursor and Codex prompts when automatic recommendations are enabled. Raw prompts go only from the native client to this local API during analysis. In default `knowledge` mode nothing leaves the device during analysis. Legacy live-discovery modes send only controlled topic labels (such as `react performance`) to skills.sh. No prompt logging, telemetry, prompt persistence, or LLM provider calls. Imported skill snapshots persist only in the ignored local `.preflight/` directory. Clicking a skill link opens its local instructions or public source. Copy actions intentionally replace the clipboard. Do not expose this unauthenticated development API to a network.
+The API binds to `127.0.0.1` and rejects browser origins. Live capture reads the focused editable field in accessible foreground apps, skipping secure and read-only controls. Captured text stays in memory. Skill analysis in default `knowledge` mode stays on-device; legacy live-discovery modes send controlled topic labels to skills.sh. **Prompt suggestions are a separate optional Groq feature:** bounded source excerpts, relative paths, the project name and current prompt/chat context leave the device. Environment files, common secret files and generated folders are excluded; common credentials are redacted. Only the project folder and preferences persist; no prompt/code logging or telemetry is added. See [the full suggestion data flow](docs/PROMPT_SUGGESTIONS.md). Imported skill snapshots persist in ignored `.preflight/`. Copy actions intentionally replace the clipboard. Do not expose this unauthenticated development API to a network.
 
 Quit Preflight before rebuilding; the build script refuses to overwrite a running app. It automatically selects a single available Apple Development certificate and remembers that identity locally in `build/.signing-identity`. With multiple certificates, set `PREFLIGHT_CODESIGN_IDENTITY` to the desired name or SHA-1. Builds are signed in a temporary directory, then installed at `~/Applications/Preflight.app` and verified. The `build/Preflight.app` path is a symlink to that installation. Both signing and the runnable bundle stay outside iCloud storage, which can invalidate signatures by reattaching Finder metadata. Set `PREFLIGHT_APP_PATH` to another absolute, non-iCloud `.app` path if needed. This is development signing, not notarized distribution.
 

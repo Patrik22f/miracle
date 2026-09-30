@@ -158,3 +158,12 @@ test('Active user constraints survive continuation; assistant prose cannot remov
   assert.deepEqual(names(await analyze({ prompt: 'Continue.', app: 'Claude Code', context: history }, options)), []);
   assert.deepEqual(names(await analyze({ prompt: 'Continue.', app: 'Claude Code', context: context('Fix Swift actor isolation. No skills.') }, options)), []);
 });
+
+test('Effort explains concrete risk and does not hide migration work behind a typo request', () => {
+  for (const prompt of ['Audit credential encryption and data loss', 'Fix the typo and migrate the entire database']) {
+    const plan = resolveTask(prompt);
+    assert.equal(plan.effort.level, 'high');
+    assert.match(plan.effort.reason, /security|integrity|migration/);
+  }
+  assert.equal(resolveTask('Rename this button to Save').effort.level, 'low');
+});

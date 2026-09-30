@@ -1,6 +1,8 @@
 # macOS app
 
-Preflight lives in the menu bar. Left-click opens the prompt review popover; right-click opens its menu. Launching or reopening an already configured app does not open a separate review window. The global review shortcut is no longer registered. First launch alone presents onboarding.
+The app is now displayed as **Zázrak**. Its executable, bundle identifier and installation path retain `Preflight` so existing preferences and Accessibility identity continue to work. The review and Helpful panel include **Your next task**, with three Groq suggestions, a project selector, **Use draft** and **Copy prompt**. **Settings → Prompts** controls automatic suggestions and the project override. See [prompt suggestions](../docs/PROMPT_SUGGESTIONS.md).
+
+Preflight lives in the menu bar. New installations default to Helpful mode; saved presentation preferences are preserved. Left-click opens the prompt review popover; right-click opens its menu. Launching or reopening an already configured app does not open a separate review window. The global review shortcut is no longer registered. First launch alone presents onboarding.
 
 ## Presentation and settings
 
@@ -17,14 +19,15 @@ The captured application's bundle identifier selects Cursor or Codex. The target
 
 The macOS client maps the API's existing `fast`, `balanced` and `capable` profiles onto available models. It does not change the shared API contract or send extra prompt data. This is a recommendation selection, not automation of another application's model picker.
 
-- Cursor models come from a small documented catalog checked on 2026-09-30. Users enable the models available to their account in Settings. Only Grok 4.6 is enabled initially, matching the local account observed during verification. Grok models expose low, medium, high and xhigh when Custom effort is available; otherwise the account uses fixed medium. Models without verified configurable effort have no effort control.
-- Codex models are read from `$CODEX_HOME/models_cache.json` or `~/.codex/models_cache.json`. Only listed models and their declared reasoning levels are used. Hidden models are excluded. A missing catalog produces an empty state rather than invented options.
+- Cursor models are read from its local `User/globalStorage/state.vscdb` in read-only mode. Only model catalog fields and enabled/disabled overrides are extracted. Effort options come from each model’s declared parameters. Settings offers a manual fallback if Cursor’s private storage format changes. Detected settings reflect local configuration, not a guarantee of account quota or server-side access.
+- Codex models are read from `$CODEX_HOME/models_cache.json` or `~/.codex/models_cache.json`. Hidden models are excluded; declared effort options are preserved. A missing catalog produces an empty state.
+- Catalogs refresh on launch, after 30 seconds during active use, or with **Refresh models**. No model catalog or prompt is sent to a remote service.
 
-Model selection is heuristic and bounded by the configured catalog. Refresh the Cursor catalog when host capabilities change. Do not infer account access from public model availability.
+Selection first matches task capability (`fast`, `balanced`, `capable`), then effort support, then host catalog order. When a tier is missing, the nearest available tier is selected. Effort maps to the nearest supported level, preferring more reasoning on ties. Names and local descriptions supply heuristic capability tiers; they are not benchmark scores. The review explains both task effort and model selection, including when only one model is enabled.
 
-Supported effort levels appear as a segmented control, with each option directly visible. A model with a fixed effort shows its value as text.
+Small explicit edits use low effort. Implementation, investigation and structured deliverables use medium. Architecture, migration, concurrency risks, production readiness, security/data integrity and multiple interacting concerns use high. Active chat context informs follow-ups; missing context is identified. Supported effort levels appear as a segmented control. Models without configurable effort show that the host manages it.
 
-Sources: [Cursor models](https://cursor.com/docs/models), [Grok 4.6 effort](https://cursor.com/docs/models/grok-4-6), [Grok 4.7 effort](https://cursor.com/docs/models/grok-4-7), [Composer 2.5](https://cursor.com/docs/models/cursor-composer-2-5). Codex's installed model cache is the source for the local account.
+Cursor’s local storage is an undocumented adapter with fixture and opt-in live tests. Public model context: [Cursor models](https://cursor.com/docs/models-and-pricing). The local catalogs are authoritative for the choices displayed on this Mac.
 
 ## Skill installation
 

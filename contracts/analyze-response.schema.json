@@ -294,7 +294,7 @@
           }
         }
       },
-      "maxItems": 3
+      "maxItems": 8
     },
     "meta": {
       "type": "object",
@@ -338,6 +338,13 @@
         "importedCount": {
           "type": "integer",
           "minimum": 0
+        },
+        "bestSkillId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "ID of skills[0], the best eligible match under the active ranking and filters; null when no skill qualifies."
         }
       }
     }

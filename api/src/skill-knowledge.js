@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto';
 import { skillCriteria, promptCriteria, evaluateSkill } from './criteria.js';
 import { resolveTask } from './task-context.js';
+import { matchesSkillFilters } from './skill-filters.js';
 
 export const knowledgeVersion = 'knowledge-v1';
+const compilerRevision = 3;
 export const knowledgeThreshold = 70;
 export const knowledgeCriteria = [
   ['purpose', 'Task purpose', 18], ['scope', 'Framework and platform', 15],
@@ -52,22 +54,26 @@ export function compileSkill(skill) {
   const references = unique([...content.matchAll(/\]\(((?:\.\/)?(?:references|scripts|assets)\/[^\s)#]+)(?:#[^\s)]*)?\)/g)].map(m => m[1].replace(/^\.\//, '')));
   const instructionLines = lines.filter(row => row.kind !== 'exclusion');
   const profile = skillCriteria(skill);
-  const exclusionScopes = unique([...`${skill.description}\n${content}`.matchAll(/\b(?:do not use|don't use) (?:this skill )?(?:for|when) ([^.;\n]+)/gi)]
-    .flatMap(match => promptCriteria(match[1]).scopes));
+  const exclusions = [...`${skill.description}\n${content}`.matchAll(/\b(?:do not use|don't use) (?:this skill )?(?:for|when) ([^.;\n]+)/gi)]
+    .map(match => promptCriteria(match[1]));
+  // An exclusion for an *open Excel workbook* must not exclude every spreadsheet.
+  // Preserve the qualifiers and require them, rather than banning whole domains.
+  const exclusionScopes = unique(exclusions.filter(rule => !rule.tokens.length).flatMap(rule => rule.scopes));
   return {
-    version: knowledgeVersion, hash: digest,
+    version: knowledgeVersion, compilerRevision, hash: digest,
     valid: Boolean(content.trim()) && (!skill.hash || skill.hash === digest),
     method: 'deterministic-content-profile', profile,
     actions: operation(`${skill.description} ${instructionLines.map(row => row.text).join('\n')}`),
     evidence: lines,
     exclusionScopes,
+    exclusions: exclusions.map(({ scopes, tokens }) => ({ scopes, tokens })),
     references,
     missingReferences: skill.files ? references.filter(path => !skill.files.some(file => file.path === path)) : [],
     manualOnly: /^disable-model-invocation:\s*true\s*(?:#.*)?$/mi.test(metadata),
     userInvocable: !/^user-invocable:\s*false\s*(?:#.*)?$/mi.test(metadata),
     // Only unequivocal host extensions constrain portability. Mentioning Codex
     // in ordinary prose does not prove that a skill is incompatible with Claude.
-    claudeOnly: /^(?:context:\s*fork|agent:|hooks:)/m.test(metadata) || /!`[^`]+`|\$\{CLAUDE_SKILL_DIR\}/.test(content),
+    claudeOnly: /^(?:agent:|hooks:)/m.test(metadata) || /!`[^`]+`|\$\{CLAUDE_SKILL_DIR\}/.test(content),
     codexOnly: /\b(?:functions\.exec|tools\.mcp__codex_app__|mcp__codex_app__\w+)/.test(content),
   };
 }
@@ -77,7 +83,7 @@ export function prepareKnowledge(library) {
   if (compiledLibraries.has(library)) return compiledLibraries.get(library);
   const entries = library.skills.map(skill => {
     const study = skill.study;
-    const cached = study?.version === knowledgeVersion && study.hash === skill.hash
+    const cached = study?.version === knowledgeVersion && study.compilerRevision === compilerRevision && study.hash === skill.hash
       && study.hash === hash(typeof skill.content === 'string' ? skill.content : '')
       && Array.isArray(study.profile?.scopes) && Array.isArray(study.profile?.purposes)
       && Array.isArray(study.profile?.tokens) && Array.isArray(study.evidence)
@@ -97,6 +103,7 @@ export function prepareKnowledge(library) {
     }
     for (const scope of entry.knowledge.profile.scopes) add(`scope:${scope}`, entry);
     for (const purpose of entry.knowledge.profile.purposes) add(`purpose:${purpose}`, entry);
+    for (const term of entry.knowledge.profile.tokens) add(`term:${term}`, entry);
     add(`name:${entry.skill.name.toLowerCase()}`, entry);
   }
   const snapshot = { entries, postings };
@@ -104,24 +111,27 @@ export function prepareKnowledge(library) {
   return snapshot;
 }
 
-export function recommendKnowledge(library, prompt, { maxSkills = 3, app = '', now = Date.now(), context, resolved } = {}) {
+export function recommendKnowledge(library, prompt, { maxSkills = 3, app = '', now = Date.now(), context, resolved, filters } = {}) {
   const plan = resolved ?? resolveTask(prompt, context);
   const task = plan.task;
   const { postings } = prepareKnowledge(library);
   if (!maxSkills || task.abstain) return [];
-  const agent = /claude(?:[ -]code)?/i.test(app) ? 'claude-code' : /codex/i.test(app) ? 'codex' : 'unknown';
+  const agent = /claude(?:[ -]code)?/i.test(app) ? 'claude-code' : /codex/i.test(app) ? 'codex' : /cursor/i.test(app) ? 'cursor' : 'unknown';
   const keys = [...task.scopes.map(s => `scope:${s}`), ...task.purposes.map(p => `purpose:${p}`),
+    ...task.tokens.map(term => `term:${term}`),
     ...(task.positive.toLowerCase().match(/[a-z0-9][a-z0-9_.:-]*/g) ?? []).map(name => `name:${name}`)];
   const candidates = unique(keys.flatMap(key => [...(postings.get(key) ?? [])]));
   const taskActions = operation(task.positive);
   const rows = [];
   for (const { skill, knowledge: k, linesByTerm } of candidates) {
+    if (!matchesSkillFilters(skill, filters, k.profile)) continue;
     if (!k.valid || !k.evidence.length) continue;
     const manualInvocation = new RegExp(`(?:^|\\s)/${skill.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=\\s|$)`, 'i').test(prompt);
     const base = evaluateSkill(skill, manualInvocation ? { ...task, positive: task.positive.replace(`/${skill.name}`, `$${skill.name}`) } : task, k.profile);
     // Explicit invocations never bypass content, agent, or exclusion gates.
-    if (!base.eligible || (agent === 'claude-code' && k.codexOnly) || (agent !== 'claude-code' && k.claudeOnly)) continue;
-    if (k.exclusionScopes.some(scope => task.scopes.includes(scope)) || k.missingReferences.length) continue;
+    if (!base.eligible || (agent !== 'codex' && k.codexOnly) || (agent !== 'claude-code' && k.claudeOnly)) continue;
+    if (k.exclusions.some(rule => rule.scopes.length && rule.scopes.every(scope => task.scopes.includes(scope))
+      && rule.tokens.every(token => task.tokens.includes(token))) || k.missingReferences.length) continue;
     if (k.manualOnly && !(agent === 'claude-code' && manualInvocation)) continue;
     if (!k.userInvocable && manualInvocation) continue;
     const evidenceHits = new Map();

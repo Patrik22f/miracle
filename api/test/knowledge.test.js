@@ -36,7 +36,7 @@ test('Metadata-only, stale hash and unrelated instructions cannot be promoted by
 });
 
 test('Agent-specific instructions and manual-only Claude skills enforce hard gates', () => {
-  const claude = { ...skill, content: '---\ncontext: fork\n---\n' + skill.content };
+  const claude = { ...skill, content: '---\nhooks: {}\n---\n' + skill.content };
   assert.equal(recommend(claude).length, 1);
   assert.deepEqual(recommend(claude, '$swift-concurrency', 'Codex'), []);
   const codex = { ...skill, content: skill.content + '\nUse tools.mcp__codex_app__open_in_codex.' };
@@ -117,4 +117,37 @@ test('Hook process fails open without echoing invalid or oversized input; config
 test('Apple AI instructions require the actual AI workflow, not generic enterprise testing', () => {
   const candidate = { ...fixtureSkill('axiom-ai', 'Use when testing Apple Intelligence on-device AI.'), content: 'Review Apple Intelligence testing security architecture.' };
   assert.deepEqual(recommendKnowledge({ skills: [candidate] }, 'Create enterprise SwiftUI architecture.', { app: 'Codex' }), []);
+});
+
+test('Unclassified workflows are retrieved from description terms with supporting instructions', () => {
+  const candidate = { ...fixtureSkill('travel-planner', 'Plan travel itineraries and day trips.'),
+    content: 'Plan travel itineraries and day trips.\nCreate travel itineraries with daily routes.', importedAt: new Date().toISOString() };
+  assert.equal(recommendKnowledge({ skills: [candidate] }, 'Create travel itineraries for my day trips.', { app: 'Codex' })[0]?.name, 'travel-planner');
+  assert.deepEqual(recommendKnowledge({ skills: [candidate] }, 'Create a function in Python.', { app: 'Codex' }), []);
+});
+
+test('Qualified exclusions do not ban an entire artifact; fork hints are portable', () => {
+  const candidate = { ...fixtureSkill('Spreadsheets', 'Create and edit Excel spreadsheets with formulas.'),
+    content: '---\ncontext: fork\n---\nCreate and edit Excel spreadsheets with formulas.\nDo not use this skill for controlling an open Excel workbook.', importedAt: new Date().toISOString() };
+  assert.equal(recommendKnowledge({ skills: [candidate] }, 'Create an Excel spreadsheet with formulas.', { app: 'Codex' })[0]?.name, 'Spreadsheets');
+  assert.deepEqual(recommendKnowledge({ skills: [candidate] }, 'Edit formulas by controlling an open Excel workbook.', { app: 'Codex' }), []);
+});
+
+test('Cursor gets portable skills but not Codex-only tool instructions', () => {
+  const candidate = { ...skill, content: skill.content + '\nUse tools.mcp__codex_app__open_in_codex.' };
+  assert.deepEqual(recommend(candidate, 'Fix Swift Sendable actor isolation.', 'Cursor'), []);
+  assert.equal(recommend(skill, 'Fix Swift Sendable actor isolation.', 'Cursor').length, 1);
+});
+
+test('Concrete non-code workflows do not require the user to name a host or framework', () => {
+  const fixtures = [
+    ['imagegen', 'Generate an image of a cat.', 'Generate and edit raster image assets.'],
+    ['writing-for-interfaces', 'Write onboarding text and error messages for this app.', 'Write onboarding text and error messages.'],
+    ['background-execution', 'Add background execution to my iOS app.', 'Implement background execution on Apple platforms.'],
+    ['skill-creator', 'Create a reusable Codex skill for writing release notes.', 'Create reusable Codex skills with clear instructions.'],
+  ];
+  for (const [name, prompt, description] of fixtures) {
+    const candidate = { ...fixtureSkill(name, description), content: `# Workflow\n${description}\n${prompt}`, importedAt: new Date().toISOString() };
+    assert.equal(recommendKnowledge({ skills: [candidate] }, prompt, { app: 'Codex' })[0]?.name, name);
+  }
 });

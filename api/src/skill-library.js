@@ -6,9 +6,13 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import { skillCriteria } from './criteria.js';
 import { createSkillsAPI, syncSkillsAPI } from './skills-api.js';
 import { compileSkill, knowledgeCriteria, prepareKnowledge } from './skill-knowledge.js';
+import { matchesSkillFilters } from './skill-filters.js';
 
 export const libraryPath = fileURLToPath(new URL('../../.preflight/skills.json', import.meta.url));
-export const defaultRoots = [join(homedir(), '.codex', 'skills'), join(homedir(), '.claude', 'skills')];
+const codexRoot = process.env.CODEX_HOME || join(homedir(), '.codex');
+export const defaultRoots = [join(codexRoot, 'skills'), join(codexRoot, 'plugins', 'cache'),
+  join(homedir(), '.cursor', 'skills'), join(homedir(), '.cursor', 'skills-cursor'), join(homedir(), '.cursor', 'plugins'),
+  join(homedir(), '.agents', 'skills'), join(homedir(), '.claude', 'skills')];
 const maxBytes = 256 * 1024;
 
 // A reviewed public starter library. Only these URLs are fetched during import.
@@ -63,7 +67,7 @@ async function boundedResponse(response) {
 }
 
 export async function importSkills({ roots = defaultRoots, includePublic = true, fetchImpl = fetch, previous = null,
-  publicProvider = process.env.VERCEL_OIDC_TOKEN ? 'skills-api' : 'starter', discover = false, api } = {}) {
+  publicProvider = process.env.VERCEL_OIDC_TOKEN ? 'skills-api' : 'starter', discover = false, searchQueries = [], searchOwner, api } = {}) {
   const skills = [], warnings = [], seen = new Set();
   let scanned = 0, duplicates = 0;
   async function walk(directory, depth = 0) {
@@ -81,7 +85,7 @@ export async function importSkills({ roots = defaultRoots, includePublic = true,
           const content = await readFile(path, 'utf8');
           skills.push(record(content, pathToFileURL(path).href, 'Installed on this Mac', 'installed'));
         } catch (error) { warnings.push(`Skipped ${path}: ${error.message}.`); }
-      } else if (entry.isDirectory() && !['.git', 'node_modules', 'references', 'assets', 'scripts', 'build'].includes(entry.name)) {
+      } else if (entry.isDirectory() && !['.git', 'node_modules', 'references', 'assets', 'scripts', 'build', 'templates', 'examples', '.venv'].includes(entry.name)) {
         try { await walk(path, depth + 1); } catch (error) { warnings.push(`Skipped ${path}: ${error.code ?? 'unreadable'}.`); }
       }
       // Do not follow nested symlinks outside a configured root.
@@ -89,10 +93,12 @@ export async function importSkills({ roots = defaultRoots, includePublic = true,
   }
   const resolvedRoots = unique(roots.map(root => resolve(root)));
   for (const root of resolvedRoots) {
-    try { await walk(root); } catch (error) { warnings.push(`Cannot import ${root}: ${error.code ?? 'unreadable'}.`); }
+    try { await walk(root); } catch (error) {
+      if (error.code !== 'ENOENT' || !defaultRoots.includes(root)) warnings.push(`Cannot import ${root}: ${error.code ?? 'unreadable'}.`);
+    }
   }
   if (includePublic && publicProvider === 'skills-api') {
-    const result = await syncSkillsAPI({ api: api ?? createSkillsAPI({ fetchImpl }), discover, previous, makeRecord: record });
+    const result = await syncSkillsAPI({ api: api ?? createSkillsAPI({ fetchImpl }), discover, searchQueries, searchOwner, previous, makeRecord: record });
     skills.push(...result.skills); warnings.push(...result.warnings);
   } else if (includePublic) {
     const results = await Promise.allSettled(publicSources.map(async source => {
@@ -116,7 +122,7 @@ export async function importSkills({ roots = defaultRoots, includePublic = true,
     const key = `${skill.provenance}:${skill.name}:${skill.hash}`;
     if (deduped.has(key)) duplicates++; else deduped.set(key, skill);
   }
-  return { version: 1, importedAt: new Date().toISOString(), roots: resolvedRoots, includePublic, publicProvider, discover, scanned, duplicates,
+  return { version: 1, importedAt: new Date().toISOString(), roots: resolvedRoots, includePublic, publicProvider, discover, searchQueries, ...(searchOwner ? { searchOwner } : {}), scanned, duplicates,
     skills: [...deduped.values()].map(skill => ({ ...skill, study: compileSkill(skill) }))
       .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)), warnings };
 }
@@ -140,13 +146,14 @@ export async function readLibrary(path = libraryPath) {
   }
 }
 
-export function librarySummary(library) {
+export function librarySummary(library, filters = {}) {
+  const skills = library.skills.filter(skill => matchesSkillFilters(skill, filters));
   return {
-    importedAt: library.importedAt ?? null, count: library.skills.length,
-    installedCount: library.skills.filter(s => s.provenance === 'installed').length,
-    publicCount: library.skills.filter(s => s.provenance === 'public-import').length,
+    importedAt: library.importedAt ?? null, count: skills.length, totalCount: library.skills.length,
+    installedCount: skills.filter(s => s.provenance === 'installed').length,
+    publicCount: skills.filter(s => s.provenance === 'public-import').length,
     warnings: library.warnings, criteria: knowledgeCriteria,
-    skills: library.skills.map(skill => ({
+    skills: skills.map(skill => ({
       id: skill.id, name: skill.name, description: skill.description, source: skill.source,
       provenance: skill.provenance, url: skill.url,
       scopes: skillCriteria(skill).scopes, purposes: skillCriteria(skill).purposes,
@@ -176,6 +183,32 @@ export function createLibraryStore(path = libraryPath, { interval = 1000 } = {})
       }
       checked = performance.now();
       return snapshot;
+    })().finally(() => { pending = null; });
+    return pending;
+  };
+}
+
+// Re-scan local skill locations periodically, even on a fresh install. Public
+// snapshots are retained; this operation makes no network requests.
+export function createLocalLibraryStore(path = libraryPath, { interval = 60_000, roots = defaultRoots } = {}) {
+  const read = createLibraryStore(path, { interval: 0 });
+  let checked = -Infinity, pending;
+  return async () => {
+    if (pending) return pending;
+    if (performance.now() - checked < interval) return read();
+    pending = (async () => {
+      const previous = await read();
+      try {
+        const local = await importSkills({ roots: unique([...previous.roots, ...roots]), includePublic: false });
+        const library = { ...previous, ...local, includePublic: previous.includePublic,
+          publicProvider: previous.publicProvider, discover: previous.discover, searchQueries: previous.searchQueries, searchOwner: previous.searchOwner,
+          skills: [...local.skills, ...previous.skills.filter(skill => skill.provenance !== 'installed')] };
+        await saveLibrary(library, path);
+        prepareKnowledge(library);
+        return library;
+      } catch {
+        return { ...previous, warnings: [...(previous.warnings ?? []), 'Automatic local skill refresh failed; using the previous library.'] };
+      } finally { checked = performance.now(); }
     })().finally(() => { pending = null; });
     return pending;
   };

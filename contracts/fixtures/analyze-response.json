@@ -130,6 +130,7 @@
     "durationMs": 0,
     "warnings": [
       "Demo fixture: illustrative content and scores, not a live recommendation."
-    ]
+    ],
+    "bestSkillId": "vercel-labs/agent-skills/vercel-react-best-practices"
   }
 }

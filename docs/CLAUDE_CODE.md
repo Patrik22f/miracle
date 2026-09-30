@@ -33,3 +33,5 @@ Malformed/oversized events, a missing or corrupt library, or an unrecognized tas
 Tests validate input/output protocol, manual invocation, compatibility, invalid inputs and safe failure. Live Claude Code acceptance and terminal live capture remain unverified.
 
 References: [Claude skills](https://code.claude.com/docs/en/skills), [hooks](https://code.claude.com/docs/en/hooks#userpromptsubmit).
+
+The first eligible result is marked `bestMatch: true`; others are false. The hook asks Claude to mention that match by name and source. This is the best match in the imported database under Preflight's ranking. If no skill qualifies, the hook supplies no recommendation. Use the same lookup manually with `npm run --silent skills:find -- "task" --app "Claude Code"`.

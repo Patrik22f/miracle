@@ -2,9 +2,11 @@
 
 # API v1
 
+`POST /suggestions` provides optional Groq-generated next-task prompts using a selected local project. It accepts empty drafts and returns three file-grounded suggestions with project revision and status. It is independent of local `/analyze`; see [the suggestion endpoint, setup and privacy details](PROMPT_SUGGESTIONS.md).
+
 Base URL: `http://127.0.0.1:8787`. `GET /health` returns `{"status":"ok","schemaVersion":"1.0"}`.
 
-`POST /analyze` requires `Content-Type: application/json` and the [request schema](../contracts/analyze-request.schema.json). Unknown fields are rejected. `app` controls known Claude/Codex skill compatibility in knowledge mode. Optional `context` carries bounded active-chat history; `analysis.context` reports whether it was used. See [the context contract](CHAT_CONTEXT.md). `maxSkills` defaults to 3.
+`POST /analyze` requires `Content-Type: application/json` and the [request schema](../contracts/analyze-request.schema.json). Unknown fields are rejected. `app` controls known Claude/Codex/Cursor skill compatibility in knowledge mode. Optional `context` carries bounded active-chat history; `analysis.context` reports whether it was used. See [the context contract](CHAT_CONTEXT.md). `maxSkills` defaults to 3 and accepts 0–8; the native client requests 6.
 
 Successful responses follow the [response schema](../contracts/analyze-response.schema.json). `skills` may be empty. `confidence` is a heuristic relevance score, not a calibrated probability. `model.profile` is one of `fast`, `balanced`, `capable`; it is not a provider model ID. `effort.level` is `low`, `medium`, or `high`.
 
@@ -32,3 +34,17 @@ The default `criteria-v2` ranker requires matching scope/purpose, checks prerequ
 The backend reads `.env` from the repository root. Existing environment variables take precedence. `PORT` changes the API port; if changed, update `APIClient.endpoint` in the client as well. `SKILLS_TIMEOUT_MS` must be 100–10,000. `SKILLS_MODE` is `hybrid` (default), `installed`, `live`, or `offline`. Run `npm run skills:import` or use the app’s Skill library before analyzing imported skills.
 
 No auth is implemented for this loopback-only scaffold. Requests and prompt text are not persisted. This API is for the native app and local CLI, not web pages.
+
+## Skill filters and best match
+
+`POST /analyze` accepts optional `filters`: `q` (all whitespace-separated terms in metadata), `provenance` (`installed`, `public-import`, `skills.sh`, or `catalog`), `source` (exact repository/source), `scope`, and `purpose`. All filters combine with AND, before ranking and limiting. Each value must be a nonempty string of at most 200 characters; unknown fields are rejected. Filters cannot bypass relevance, host compatibility, or user exclusions.
+
+```json
+{"prompt":"Fix Swift Sendable actor isolation.","app":"Codex","maxSkills":1,"filters":{"provenance":"installed","scope":"swift"}}
+```
+
+`meta.bestSkillId` identifies `skills[0]`, or is null when there is no eligible result. This field is additive and optional for older clients.
+
+Browse filters use query parameters, e.g. `GET /skills?provenance=installed&scope=swiftui&purpose=performance`. It supports the same five fields. Empty, repeated, and unknown parameters return 400. `count`, `installedCount`, and `publicCount` describe the filtered results; `totalCount` is the full library size. Browse ordering stays alphabetical; a task prompt through `/analyze` is needed for a best match.
+
+`POST /skills/import` reuses saved skills.sh topic queries and owner. Its empty-object request remains unchanged; HTTP clients cannot supply discovery queries or paths. Configure topic imports with `npm run skills:import -- --query "topic" [--owner owner]` and `VERCEL_OIDC_TOKEN`.

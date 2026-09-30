@@ -118,7 +118,7 @@ test('HTTP API validates bodies and errors; rejects browser origins', async t =>
   const success = await post(JSON.stringify(example));
   assert.equal(success.status, 200);
   matchesSchema(await success.json(), await read('contracts/analyze-response.schema.json'));
-  for (const bad of ['{}', 'null', '{', '{"prompt":" "}', '{"prompt":42}', '{"prompt":"Hi","maxSkills":4}', '{"prompt":"Hi","unexpected":true}']) {
+  for (const bad of ['{}', 'null', '{', '{"prompt":" "}', '{"prompt":42}', '{"prompt":"Hi","maxSkills":9}', '{"prompt":"Hi","unexpected":true}']) {
     const response = await post(bad);
     assert.equal(response.status, 400);
     matchesSchema(await response.json(), await read('contracts/error.schema.json'));

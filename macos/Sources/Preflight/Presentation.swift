@@ -23,11 +23,14 @@ final class AppSettings {
     var completedOnboarding: Bool { didSet { defaults.set(completedOnboarding, forKey: "completedOnboarding") } }
     var cursorModelIDs: Set<String> { didSet { defaults.set(Array(cursorModelIDs), forKey: "cursorModelIDs") } }
     var cursorCustomEffort: Bool { didSet { defaults.set(cursorCustomEffort, forKey: "cursorCustomEffort") } }
+    var detectCursorModels: Bool { didSet { defaults.set(detectCursorModels, forKey: "detectCursorModels") } }
     var installInProject: Bool { didSet { defaults.set(installInProject, forKey: "installInProject") } }
     var projectPath: String { didSet { defaults.set(projectPath, forKey: "skillProjectPath") } }
 
     func availableModels(for host: HostApp, catalog: ModelCatalog) -> [RecommendedModel] {
-        catalog.models(for: host).filter { host != .cursor || cursorModelIDs.contains($0.id) }
+        catalog.models(for: host).filter {
+            host != .cursor || (detectCursorModels && catalog.cursorDetected ? $0.enabled : cursorModelIDs.contains($0.id))
+        }
     }
 
     func installRoot(for host: HostApp) -> URL? {
@@ -40,11 +43,12 @@ final class AppSettings {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        mode = DisplayMode(rawValue: defaults.string(forKey: "displayMode") ?? "") ?? .stealth
+        mode = DisplayMode(rawValue: defaults.string(forKey: "displayMode") ?? "") ?? .helpful
         automatic = defaults.object(forKey: "automaticRecommendations") as? Bool ?? true
         completedOnboarding = defaults.bool(forKey: "completedOnboarding")
         cursorModelIDs = Set(defaults.stringArray(forKey: "cursorModelIDs") ?? ["grok-4.6"])
         cursorCustomEffort = defaults.bool(forKey: "cursorCustomEffort")
+        detectCursorModels = defaults.object(forKey: "detectCursorModels") as? Bool ?? true
         installInProject = defaults.bool(forKey: "installInProject")
         projectPath = defaults.string(forKey: "skillProjectPath") ?? ""
     }

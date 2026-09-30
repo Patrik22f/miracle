@@ -14,13 +14,13 @@ struct OverlayView: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 10) {
                 Image(systemName: "sparkle").font(.title2).foregroundStyle(.tint)
-                Text("Preflight").font(.title2.weight(.semibold))
+                Text("Zázrak").font(.title2.weight(.semibold))
                 if model.demoMode { Text("Demo").font(.caption).foregroundStyle(.secondary) }
                 Spacer()
                 Button { showingLibrary = true } label: { Image(systemName: "books.vertical") }
                     .accessibilityLabel("Skill library")
                 Button(action: openSettings) { Image(systemName: "gearshape") }.accessibilityLabel("Settings")
-                Button(action: close) { Image(systemName: "xmark") }.accessibilityLabel("Close Preflight")
+                Button(action: close) { Image(systemName: "xmark") }.accessibilityLabel("Close Zázrak")
                     .keyboardShortcut(.cancelAction)
             }.buttonStyle(.borderless)
             HStack {
@@ -78,6 +78,10 @@ struct OverlayView: View {
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    if !model.demoMode {
+                        PromptSuggestionsView(suggestions: model.suggestions, use: model.useSuggestion)
+                        Divider()
+                    }
                     if let result = model.result {
                         ModelRecommendationView(result: result, host: model.targetApp, settings: settings, catalog: catalog)
                         Text(result.contextLabel).font(.caption).foregroundStyle(.secondary)
@@ -86,6 +90,9 @@ struct OverlayView: View {
                                 Text("Skills").font(.headline)
                                 Text("\(result.skills.count)").font(.caption).foregroundStyle(.secondary)
                                 Spacer()
+                                if let count = result.meta.importedCount {
+                                    Text("\(count) in library").font(.caption).foregroundStyle(.secondary)
+                                }
                                 Text(model.demoMode ? "Demo" : result.sourceLabel).font(.caption).foregroundStyle(.secondary)
                             }.padding(.bottom, 4)
                             if result.skills.isEmpty { Text(result.emptySkillsLabel).font(.callout).foregroundStyle(.secondary) }

@@ -111,7 +111,8 @@ func staleResponse() async throws {
     #expect(model.prompt == "After edit")
     #expect(model.result == nil)
     #expect(!model.hasUnreadRecommendation)
-    #expect(!model.isLoading)
+    #expect(model.isLoading) // The edited prompt is now scheduled automatically.
+    model.cancel()
 }
 
 private func snapshot(_ text: String, field: UUID = UUID(), x: CGFloat = 0) -> PromptSnapshot {
@@ -187,4 +188,13 @@ private actor AnalysisGate {
         await withCheckedContinuation { started = $0 }
     }
     func finish(_ response: AnalyzeResponse) { pending?.resume(returning: response); pending = nil }
+}
+
+@Test("Composer labels can vary without requiring a specific English placeholder")
+func composerLabels() {
+    for label in ["Ask", "Message", "Describe your task", "Build anything", "What would you like to do?"] {
+        #expect(PromptPolicy.accepts(bundleID: "com.todesktop.230313mzl4w4u92", role: kAXTextAreaRole, subrole: "", label: label))
+    }
+    #expect(PromptPolicy.accepts(bundleID: "com.openai.codex", role: kAXTextAreaRole, subrole: "", label: ""))
+    #expect(!PromptPolicy.accepts(bundleID: "com.todesktop.230313mzl4w4u92", role: kAXTextAreaRole, subrole: "", label: ""))
 }
