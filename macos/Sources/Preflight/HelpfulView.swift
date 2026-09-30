@@ -47,7 +47,7 @@ struct HelpfulView: View {
             if model.result != nil || model.suggestions.response?.status == "ready" {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
-                        if !model.demoMode, model.suggestions.response?.status == "ready" {
+                        if model.suggestions.response?.status == "ready" {
                             PromptSuggestionsView(suggestions: model.suggestions, compact: true) { suggestion in
                                 model.useSuggestion(suggestion)
                                 review()

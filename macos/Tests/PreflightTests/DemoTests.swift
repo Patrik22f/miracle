@@ -21,6 +21,8 @@ struct DemoTests {
         }
         model.loadDemo()
         #expect(model.prompt.isEmpty)
+        #expect(model.suggestions.demoMode)
+        #expect(model.suggestions.projectPath == DemoCatalog.projectPath)
         model.receiveCapture(.captured(.cursorFixture(text: DemoCatalog.scenarios[0].prompt)))
         await model.task?.value
         #expect(model.result?.skills.first?.name == "supabase-postgres-best-practices")
@@ -39,6 +41,7 @@ struct DemoTests {
         #expect(model.hasUnreadRecommendation)
         #expect(model.targetApp == .cursor)
         #expect(model.activeSnapshot != nil)
+        #expect(model.suggestions.task == nil)
     }
 
     @MainActor @Test("Clearing or leaving demo discards pending results and resumes the detected host")
@@ -59,6 +62,8 @@ struct DemoTests {
         #expect(model.result == nil)
         #expect(model.prompt.isEmpty)
         #expect(model.targetApp == nil)
+        #expect(!model.suggestions.demoMode)
+        #expect(model.suggestions.response == nil)
         model.receiveCapture(.captured(.cursorFixture()))
         #expect(model.targetApp == .cursor)
         await model.task?.value
