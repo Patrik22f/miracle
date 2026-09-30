@@ -13,11 +13,14 @@ enum DemoCatalog {
         .init(id: "launch", title: "2. Design, texty a iOS", prompt: "Předělej design tohoto webu ve stylu Apple.com. Přepiš nadpisy a texty podle marketingových copywriting zásad a připrav nativní iOS aplikaci ve SwiftUI.")
     ]
 
-    static var promptSuggestions: SuggestionResponse {
-        .init(schemaVersion: "1.0", status: "ready", suggestions: scenarios.map {
-            .init(id: "demo-\($0.id)", title: $0.title, prompt: $0.prompt, reason: "", files: [])
-        }, provider: "bundled", model: "", retryAfterMs: 0)
+    static var projectPath: String {
+        AnalyzeResponse.resources.url(forResource: "index", withExtension: "html", subdirectory: "Demo")?
+            .deletingLastPathComponent().path ?? ""
     }
+
+    static let suggestionBrief = """
+    Shopfront je zatím statický obchod. Plánované, dosud nerealizované cíle jsou databáze pro produkty, zákazníky a objednávky, nový design inspirovaný Apple.com s marketingovými texty a nativní iOS aplikace ve SwiftUI. Navrhni v češtině tři konkrétní další úkoly podle skutečného zdrojového kódu a těchto cílů.
+    """
 
     static let skills: [AnalyzeResponse.Skill] = [
         skill("supabase/agent-skills", "supabase-postgres-best-practices", "Postgres query and database design guidance."),

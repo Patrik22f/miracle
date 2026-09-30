@@ -41,7 +41,7 @@ git switch main
 git pull --ff-only origin main
 ```
 
-Conflict resolution preserves automatic host detection, read-only model/effort recommendations, the single-line captured prompt and demo installations that only affect session state. The review includes project suggestions and chat context. **Use draft** pauses capture, retains the detected host for recommendations, and exposes draft editing/copying plus **Resume live capture**. Demo follows real prompts but uses the local catalog and suspends Groq suggestions.
+Conflict resolution preserves automatic host detection, read-only model/effort recommendations, the single-line captured prompt and demo installations that only affect session state. The review includes project suggestions and chat context. **Use draft** pauses capture, retains the detected host for recommendations, and exposes draft editing/copying plus **Resume live capture**. Demo follows real prompts and uses the local skill catalog. Its suggested prompts use Groq with the bundled Shopfront source and presentation brief, without changing the normally selected project.
 
 For UI acceptance, check prompt capture and focus behavior in Cursor/Codex, model/skill display, project selection, suggestion loading/error/empty states, Use draft, Copy prompt, settings and permission onboarding. Live Groq calls were not repeated for this merge.
 

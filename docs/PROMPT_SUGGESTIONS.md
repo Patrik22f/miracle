@@ -6,7 +6,7 @@ Miracle suggests three concrete next tasks using the current project code, unsen
 
 1. Add `GROQ_API_KEY` to the ignored local `.env`. `GROQ_MODEL` defaults to `openai/gpt-oss-120b`, following the Notamhelp client. Restart `npm start` after changing it.
 2. Open **Your next task → Choose a project**, or **Settings → Prompts**. Choose the code folder once; the selection is remembered independently of skill installation.
-3. Leave **Suggest prompts automatically** enabled. The existing global automatic-recommendations switch pauses both features. Demo mode and setup/settings suspend background suggestions.
+3. Leave **Suggest prompts automatically** enabled. The existing global automatic-recommendations switch pauses both features. Setup/settings suspend background suggestions. Demo mode uses the same Groq service with the bundled Shopfront folder and a presentation brief; the normal selected project and captured chat are excluded from that request.
 
 When Cursor or Codex exposes a local file URL as its focused window's Accessibility document, Miracle can resolve its enclosing Git repository or package automatically. **Follow the active project's document** removes the manual folder override. Not every host exposes this information; Miracle asks for a folder rather than guessing from recent projects or other chats. A manually selected folder remains selected when switching apps; the UI labels it **Selected project**. Unsaved editor buffers are not indexed; save files for the next scan.
 

@@ -11,16 +11,16 @@ struct PromptSuggestionsView: View {
                 Label(suggestions.demoMode ? "Suggested prompts" : "Your next task", systemImage: "sparkles").font(.headline)
                 Spacer()
                 if suggestions.isLoading { ProgressView().controlSize(.small) }
-                if !suggestions.demoMode {
-                    Button(action: suggestions.refresh) { Image(systemName: "arrow.clockwise") }
-                        .buttonStyle(.borderless).accessibilityLabel("Refresh prompt suggestions")
-                        .disabled(suggestions.projectPath.isEmpty || !suggestions.enabled || suggestions.isLoading)
-                }
+                Button(action: suggestions.refresh) { Image(systemName: "arrow.clockwise") }
+                    .buttonStyle(.borderless).accessibilityLabel("Refresh prompt suggestions")
+                    .disabled(suggestions.projectPath.isEmpty || (!suggestions.enabled && !suggestions.demoMode) || suggestions.isLoading)
             }
             if !suggestions.enabled && !suggestions.demoMode {
                 Button("Enable prompt suggestions") { suggestions.setEnabled(true) }
             } else {
-                if !suggestions.demoMode {
+                if suggestions.demoMode {
+                    Label(suggestions.projectName, systemImage: "folder").font(.caption).foregroundStyle(.secondary)
+                } else {
                     HStack {
                         Button(action: suggestions.chooseProject) {
                             Label(suggestions.projectName, systemImage: "folder")

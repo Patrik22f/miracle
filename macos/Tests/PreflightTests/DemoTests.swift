@@ -22,7 +22,7 @@ struct DemoTests {
         model.loadDemo()
         #expect(model.prompt.isEmpty)
         #expect(model.suggestions.demoMode)
-        #expect(model.suggestions.response?.suggestions.map(\.prompt) == DemoCatalog.scenarios.map(\.prompt))
+        #expect(model.suggestions.projectPath == DemoCatalog.projectPath)
         model.receiveCapture(.captured(.cursorFixture(text: DemoCatalog.scenarios[0].prompt)))
         await model.task?.value
         #expect(model.result?.skills.first?.name == "supabase-postgres-best-practices")
@@ -41,7 +41,6 @@ struct DemoTests {
         #expect(model.hasUnreadRecommendation)
         #expect(model.targetApp == .cursor)
         #expect(model.activeSnapshot != nil)
-        #expect(model.suggestions.response?.status == "ready")
         #expect(model.suggestions.task == nil)
     }
 

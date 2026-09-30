@@ -109,7 +109,7 @@ final class AppModel {
         else if captureSuspended { captureStatus = .reviewing }
         else { captureStatus = AccessibilityPermission.isGranted ? .waiting : .permissionRequired }
         if captureStarted { monitor.start() }
-        suggestions.setRunning(captureStarted && automaticRecommendationsEnabled && !demoMode && !captureSuspended)
+        suggestions.setRunning(captureStarted && automaticRecommendationsEnabled && !captureSuspended)
         presentationChanged()
     }
 
